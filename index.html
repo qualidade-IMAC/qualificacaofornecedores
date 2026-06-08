@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IMAC - Controle de Qualidade</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- Babel para JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- SheetJS para ler Excel/CSV -->
+    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+
+    <!-- Estilos Extras -->
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .animate-in { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect, useRef } = React;
+
+        // --- Ícones ---
+        const Icons = {
+            ShieldCheck: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>,
+            AlertTriangle: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>,
+            FileText: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>,
+            Search: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
+            CheckCircle: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>,
+            BarChart3: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>,
+            Users: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
+            Upload: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>,
+            Plus: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M5 12h14"/><path d="M12 5v14"/></svg>,
+            Trash2: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>,
+            Edit: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+            Eye: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>,
+            X: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
+            Settings: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            FilterX: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M13.013 17.653 21 17.65"/><path d="M18.886 19.687 21 17.65 18.886 15.614"/><path d="M2.384 10.435a2.1 2.1 0 0 1 0-2.83l5.962-6.198a2.12 2.12 0 0 1 3.012 0l5.885 6.12a2.1 2.1 0 0 1 0 2.83l-5.961 6.199a2.12 2.12 0 0 1-3.013 0z"/><path d="M11.69 16.55 10 18"/></svg>,
+            Package: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        };
+
+        // --- Configuração ---
+        const DOCUMENT_TYPES = [
+            { id: 'alvara_func', name: '1. Alvará de Funcionamento', frequency: 'Anual', required: true, legislation: 'Municipal' },
+            { id: 'licenca_san', name: '2. Licença Sanitária', frequency: 'Anual', required: true, legislation: 'RDC 275/2002' },
+            { id: 'agua_fq', name: '3. Análise Físico-Química da Água', frequency: 'Semestral', required: true, legislation: 'Portaria GM/MS 888' },
+            { id: 'agua_micro', name: '4. Análise Microbiológica da Água', frequency: 'Mensal', required: true, legislation: 'Portaria GM/MS 888' },
+            { id: 'pragas', name: '5. Certificado Controle de Pragas', frequency: 'Mensal/Trimestral', required: true, legislation: 'RDC 216/2004' },
+            { id: 'sif_sie', name: '6. Registro do Selo de Inspeção (SIF/SIE)', frequency: 'Vigência do Registro', required: true, legislation: 'RIISPOA' },
+            { id: 'ficha', name: '7. Ficha Técnica do Produto', frequency: 'Único (atualizar se mudar)', required: true, legislation: 'RDC 259/2002' },
+            { id: 'laudo', name: '8. Laudo de Análise do Produto', frequency: 'Por Lote', required: true, legislation: 'Controle de Qualidade' }
+        ];
+
+        // --- Dados Iniciais Mockados ---
+        const INITIAL_SUPPLIERS = [
+            {
+                id: 1,
+                name: "GRANDE MOINHO CEARENSE S A",
+                status: "Qualificado",
+                insumos: ["Farinha de Trigo Especial", "Mistura para Bolo"],
+                documents: [
+                    { id: 'd1', type: 'alvara_func', issueDate: '2024-01-10', expiryDate: '2025-01-10', status: 'valid', fileName: 'alvara_2024.pdf' },
+                    { id: 'd2', type: 'licenca_san', issueDate: '2024-02-15', expiryDate: '2025-02-15', status: 'valid', fileName: 'licenca_sanitaria.pdf' },
+                    { id: 'd3', type: 'pragas', issueDate: '2024-06-01', expiryDate: '2024-09-01', status: 'warning', fileName: 'dedetizacao_junho.pdf' }
+                ]
+            },
+            {
+                id: 2,
+                name: "NESTLE BRASIL LTDA",
+                status: "Pendente",
+                insumos: ["Cacau em Pó", "Leite Condensado"],
+                documents: [
+                    { id: 'd4', type: 'sif_sie', issueDate: '2020-01-01', expiryDate: '2030-01-01', status: 'valid', fileName: 'registro_sif.pdf' },
+                    { id: 'd5', type: 'agua_micro', issueDate: '2024-01-01', expiryDate: '2024-02-01', status: 'expired', fileName: 'agua_jan.pdf' }
+                ]
+            },
+            {
+                id: 3,
+                name: "BRF S.A.",
+                status: "Em Análise",
+                insumos: ["Peito de Frango Desfiado", "Margarina Folhada"],
+                documents: [
+                    { id: 'd6', type: 'ficha', issueDate: '2024-01-01', expiryDate: '', status: 'valid', fileName: 'ficha_tecnica_frango.pdf' },
+                    { id: 'd7', type: 'laudo', issueDate: '2024-06-01', expiryDate: '', status: 'valid', fileName: 'laudo_lote_123.pdf' }
+                ]
+            }
+        ];
+
+        // --- App Principal ---
+
+        function App() {
+            const [suppliers, setSuppliers] = useState(INITIAL_SUPPLIERS);
+            const [selectedSupplier, setSelectedSupplier] = useState(null);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [view, setView] = useState('dashboard');
+            const [isImporting, setIsImporting] = useState(false);
+            const [listFilter, setListFilter] = useState('all'); // 'all', 'expired', 'pending', 'qualified'
+            
+            // Novos Estados para Insumos
+            const [searchInsumo, setSearchInsumo] = useState("");
+            const [selectedInsumoData, setSelectedInsumoData] = useState(null);
+
+            // Branding State
+            const [brandColor, setBrandColor] = useState('#1e40af'); // Azul Escuro padrão
+            const [logoUrl, setLogoUrl] = useState(null);
+            const [showSettings, setShowSettings] = useState(false);
+
+            // Document Modal State
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [docForm, setDocForm] = useState({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
+            
+            // Estado para os Insumos
+            const [newInsumo, setNewInsumo] = useState('');
+
+            // Stats
+            const stats = useMemo(() => {
+                const total = suppliers.length;
+                const qualified = suppliers.filter(s => s.status === 'Qualificado').length;
+                let expiredDocs = 0;
+                suppliers.forEach(s => s.documents.forEach(d => { if (d.status === 'expired') expiredDocs++; }));
+                const pendingReview = suppliers.filter(s => s.status === 'Em Análise' || s.status === 'Pendente').length;
+                return { total, qualified, expiredDocs, pendingReview };
+            }, [suppliers]);
+
+            // Filter Logic
+            const filteredSuppliers = useMemo(() => {
+                return suppliers.filter(s => {
+                    const matchesSearch = s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase());
+                    
+                    let matchesFilter = true;
+                    if (listFilter === 'expired') {
+                        matchesFilter = s.documents.some(d => d.status === 'expired');
+                    } else if (listFilter === 'pending') {
+                        matchesFilter = s.status === 'Pendente' || s.status === 'Em Análise';
+                    } else if (listFilter === 'qualified') {
+                        matchesFilter = s.status === 'Qualificado';
+                    }
+
+                    return matchesSearch && matchesFilter;
+                });
+            }, [suppliers, searchTerm, listFilter]);
+
+            // Lógica de Agrupamento de Insumos
+            const insumosData = useMemo(() => {
+                const map = new Map();
+                suppliers.forEach(supplier => {
+                    if (supplier.insumos && Array.isArray(supplier.insumos)) {
+                        supplier.insumos.forEach(insumo => {
+                            const key = insumo.trim().toUpperCase();
+                            if (!map.has(key)) {
+                                map.set(key, { name: insumo.trim(), suppliers: [] });
+                            }
+                            map.get(key).suppliers.push(supplier);
+                        });
+                    }
+                });
+                return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+            }, [suppliers]);
+
+            const filteredInsumos = useMemo(() => {
+                return insumosData.filter(i => i.name.toLowerCase().includes(searchInsumo.toLowerCase()));
+            }, [insumosData, searchInsumo]);
+
+            // --- Navigation Handlers ---
+            const handleDashboardClick = (filterType) => {
+                setListFilter(filterType);
+                setView('list');
+            };
+
+            // --- Handlers (Upload CSV) ---
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsImporting(true);
+                const reader = new FileReader();
+                reader.onload = (evt) => {
+                    try {
+                        const bstr = evt.target.result;
+                        const wb = XLSX.read(bstr, { type: 'binary' });
+                        const wsname = wb.SheetNames[0];
+                        const ws = wb.Sheets[wsname];
+                        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                        const newSuppliers = [];
+                        let currentId = Math.max(...suppliers.map(s => s.id), 0) + 1;
+
+                        data.forEach((row) => {
+                            if (row.length > 6 && row[6] && typeof row[6] === 'string') {
+                                const name = row[6].trim();
+                                if (name !== 'FORNECEDORES' && name.length > 2) {
+                                    if (!suppliers.some(s => s.name === name) && !newSuppliers.some(s => s.name === name)) {
+                                        newSuppliers.push({ id: currentId++, name: name, status: "Pendente", insumos: [], documents: [] });
+                                    }
+                                }
+                            }
+                        });
+
+                        if (newSuppliers.length > 0) {
+                            setSuppliers(prev => [...prev, ...newSuppliers]);
+                            alert(`${newSuppliers.length} fornecedores importados!`);
+                        } else {
+                            alert("Nenhum fornecedor novo encontrado.");
+                        }
+                    } catch (error) {
+                        alert("Erro ao ler planilha.");
+                    } finally {
+                        setIsImporting(false);
+                    }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            // --- Handlers (Docs) ---
+            const openAddModal = () => {
+                setDocForm({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
+                setIsModalOpen(true);
+            };
+
+            const openEditModal = (doc) => {
+                setDocForm({
+                    id: doc.id,
+                    type: doc.type,
+                    expiryDate: doc.expiryDate || '',
+                    fileData: doc.fileData, 
+                    fileName: doc.fileName
+                });
+                setIsModalOpen(true);
+            };
+
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setDocForm(prev => ({
+                            ...prev,
+                            fileData: reader.result, 
+                            fileName: file.name
+                        }));
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSaveDocument = () => {
+                if (!selectedSupplier || !docForm.type) {
+                    alert("Selecione o tipo de documento.");
+                    return;
+                }
+                let status = 'valid';
+                if (docForm.expiryDate) {
+                    const today = new Date();
+                    const expiry = new Date(docForm.expiryDate);
+                    const diffTime = expiry - today;
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    if (diffDays < 0) status = 'expired';
+                    else if (diffDays < 30) status = 'warning';
+                }
+
+                const docPayload = {
+                    id: docForm.id || Date.now().toString(),
+                    type: docForm.type,
+                    issueDate: new Date().toISOString().split('T')[0],
+                    expiryDate: docForm.expiryDate,
+                    status: status,
+                    fileData: docForm.fileData,
+                    fileName: docForm.fileName
+                };
+
+                const updatedSuppliers = suppliers.map(s => {
+                    if (s.id === selectedSupplier.id) {
+                        let newDocs;
+                        if (docForm.id) {
+                            newDocs = s.documents.map(d => d.id === docForm.id ? { ...d, ...docPayload } : d);
+                        } else {
+                            const others = s.documents.filter(d => d.type !== docForm.type);
+                            newDocs = [...others, docPayload];
+                        }
+                        return { ...s, documents: newDocs };
+                    }
+                    return s;
+                });
+                setSuppliers(updatedSuppliers);
+                setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
+                setIsModalOpen(false);
+            };
+
+            const handleDeleteDocument = (docId) => {
+                if (!confirm("Tem certeza que deseja excluir este documento?")) return;
+                const updatedSuppliers = suppliers.map(s => {
+                    if (s.id === selectedSupplier.id) {
+                        return { ...s, documents: s.documents.filter(d => d.id !== docId) };
+                    }
+                    return s;
+                });
+                setSuppliers(updatedSuppliers);
+                setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
+            };
+
+            const handleLogoUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => setLogoUrl(reader.result);
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleViewDocument = (doc) => {
+                if (doc.fileData) {
+                    const win = window.open();
+                    win.document.write(`<iframe src="${doc.fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+                } else {
+                    alert("Este documento não possui arquivo digital anexado.");
+                }
+            };
+
+            const handleChangeStatus = (newStatus) => {
+                if (!selectedSupplier) return;
+                const updatedSuppliers = suppliers.map(s => s.id === selectedSupplier.id ? { ...s, status: newStatus } : s);
+                setSuppliers(updatedSuppliers);
+                setSelectedSupplier({ ...selectedSupplier, status: newStatus });
+            };
+
+            const handleAddInsumo = () => {
+                if (!newInsumo.trim() || !selectedSupplier) return;
+                const updatedSuppliers = suppliers.map(s => {
+                    if (s.id === selectedSupplier.id) {
+                        const currentInsumos = s.insumos || [];
+                        return { ...s, insumos: [...currentInsumos, newInsumo.trim()] };
+                    }
+                    return s;
+                });
+                setSuppliers(updatedSuppliers);
+                setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
+                setNewInsumo('');
+            };
+
+            const handleRemoveInsumo = (insumoToRemove) => {
+                if (!selectedSupplier) return;
+                const updatedSuppliers = suppliers.map(s => {
+                    if (s.id === selectedSupplier.id) {
+                        return { ...s, insumos: (s.insumos || []).filter(i => i !== insumoToRemove) };
+                    }
+                    return s;
+                });
+                setSuppliers(updatedSuppliers);
+                setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
+            };
+
+            // Components
+            const StatusBadge = ({ status }) => {
+                const styles = {
+                    'Qualificado': 'bg-green-100 text-green-800 border-green-200',
+                    'Pendente': 'bg-yellow-100 text-yellow-800 border-yellow-200',
+                    'Em Análise': 'bg-blue-100 text-blue-800 border-blue-200',
+                    'Bloqueado': 'bg-red-100 text-red-800 border-red-200',
+                    'valid': 'bg-green-50 text-green-700 border-green-200',
+                    'expired': 'bg-red-50 text-red-700 border-red-200',
+                    'warning': 'bg-orange-50 text-orange-700 border-orange-200',
+                    'missing': 'bg-gray-100 text-gray-500 border-gray-200 border-dashed'
+                };
+                const labels = { 'valid': 'Vigente', 'expired': 'Vencido', 'warning': 'Vence < 30 dias', 'missing': 'Pendente' };
+                return <span className={`px-2 py-1 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100 text-gray-800'}`}>{labels[status] || status}</span>;
+            };
+
+            const Card = ({ title, value, subtext, icon: Icon, colorClass, onClick }) => (
+                <div 
+                    onClick={onClick}
+                    className={`bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-start justify-between transition-all ${onClick ? 'cursor-pointer hover:shadow-md active:scale-95' : ''}`}
+                >
+                    <div>
+                        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+                        <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
+                        {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+                    </div>
+                    <div className={`p-3 rounded-lg ${colorClass}`}><Icon size={24} /></div>
+                </div>
+            );
+
+            // --- Render ---
+
+            return (
+                <div className="min-h-screen bg-slate-50 relative font-sans text-slate-900">
+                    {/* Header Dinâmico */}
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm transition-colors duration-300">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center h-16">
+                                <div className="flex items-center gap-3">
+                                    {logoUrl ? (
+                                        <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
+                                    ) : (
+                                        <div style={{ color: brandColor }}><Icons.ShieldCheck size={32} /></div>
+                                    )}
+                                    <div>
+                                        <h1 className="text-xl font-bold tracking-tight" style={{ color: brandColor }}>
+                                            IMAC
+                                        </h1>
+                                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Controle de Qualidade</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-6">
+                                    <nav className="hidden md:flex gap-1">
+                                        <button onClick={() => { setView('dashboard'); setListFilter('all'); }} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'dashboard' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Dashboard</button>
+                                        <button onClick={() => setView('list')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'list' || view === 'detail' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'list' || view === 'detail' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Fornecedores</button>
+                                        <button onClick={() => setView('insumos')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'insumos' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'insumos' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Insumos</button>
+                                    </nav>
+                                    <div className="h-6 w-px bg-slate-200"></div>
+                                    <button onClick={() => setShowSettings(!showSettings)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100" title="Configurações de Marca">
+                                        <Icons.Settings size={20} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Settings Panel */}
+                    {showSettings && (
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 animate-in">
+                            <div className="bg-white border border-slate-200 rounded-lg p-4 shadow-lg flex flex-col md:flex-row gap-6 items-center">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">COR DA MARCA</label>
+                                    <div className="flex gap-2">
+                                        <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="h-8 w-16 cursor-pointer border rounded" />
+                                        <span className="text-xs text-slate-400 self-center">{brandColor}</span>
+                                    </div>
+                                </div>
+                                <div className="flex-1 w-full">
+                                    <label className="block text-xs font-bold text-slate-500 mb-1">LOGO DA EMPRESA</label>
+                                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200" />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {/* VIEW: DASHBOARD */}
+                        {view === 'dashboard' && (
+                            <div className="animate-in">
+                                <div className="mb-8 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden" style={{ background: `linear-gradient(to right, ${brandColor}, #1e293b)` }}>
+                                    <div className="relative z-10 max-w-3xl">
+                                        <h2 className="text-2xl font-bold mb-2">Painel de Controle</h2>
+                                    </div>
+                                    <Icons.BarChart3 className="absolute right-8 bottom-[-20px] text-white/10 w-40 h-40" />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                                    <Card 
+                                        onClick={() => handleDashboardClick('all')} 
+                                        title="Total" value={stats.total} icon={Icons.Users} colorClass="bg-slate-100 text-slate-600" 
+                                    />
+                                    <Card 
+                                        onClick={() => handleDashboardClick('qualified')}
+                                        title="Qualificados" value={`${stats.total ? ((stats.qualified / stats.total) * 100).toFixed(0) : 0}%`} icon={Icons.ShieldCheck} colorClass="bg-green-50 text-green-600" 
+                                    />
+                                    <Card 
+                                        onClick={() => handleDashboardClick('expired')}
+                                        title="Docs. Vencidos" value={stats.expiredDocs} icon={Icons.AlertTriangle} colorClass="bg-red-50 text-red-600" subtext="Clique para ver detalhes"
+                                    />
+                                    <Card 
+                                        onClick={() => handleDashboardClick('pending')}
+                                        title="Pendentes" value={stats.pendingReview} icon={Icons.FileText} colorClass="bg-yellow-50 text-yellow-600" subtext="Clique para ver detalhes"
+                                    />
+                                </div>
+                                
+                                <footer className="mt-12 text-center text-xs text-slate-400 border-t border-slate-200 pt-4">
+                                    <p>© {new Date().getFullYear()} IMAC Indústria de Massas Congeladas Ltda. Todos os direitos reservados.</p>
+                                </footer>
+                            </div>
+                        )}
+
+                        {/* VIEW: LISTA */}
+                        {view === 'list' && (
+                            <div className="space-y-6 animate-in">
+                                {listFilter !== 'all' && (
+                                    <div className="bg-slate-800 text-white px-4 py-3 rounded-lg flex items-center justify-between shadow-md">
+                                        <div className="flex items-center gap-2">
+                                            <Icons.FilterX size={20} className="text-slate-300" />
+                                            <span className="text-sm font-medium">
+                                                Filtrando por: 
+                                                <span className="font-bold ml-1 text-white">
+                                                    {listFilter === 'expired' && 'Documentos Vencidos'}
+                                                    {listFilter === 'pending' && 'Pendentes de Análise'}
+                                                    {listFilter === 'qualified' && 'Fornecedores Qualificados'}
+                                                </span>
+                                            </span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setListFilter('all')}
+                                            className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors font-semibold"
+                                        >
+                                            Limpar Filtros
+                                        </button>
+                                    </div>
+                                )}
+
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="relative w-full sm:w-96">
+                                        <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': brandColor }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                    </div>
+                                    <div className="flex gap-2 w-full sm:w-auto">
+                                        <label className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors w-full justify-center sm:w-auto shadow-sm hover:opacity-90" style={{ backgroundColor: brandColor }}>
+                                            <Icons.Upload size={16} /> {isImporting ? '...' : 'Importar CSV'}
+                                            <input type="file" accept=".csv, .xls, .xlsx" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-slate-50 border-b border-slate-200">
+                                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Fornecedor</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Status</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-slate-500 uppercase">Ação</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {filteredSuppliers.map(supplier => {
+                                                    // Se estiver filtrando por vencidos, mostrar qual doc venceu
+                                                    const expiredDocs = listFilter === 'expired' 
+                                                        ? supplier.documents.filter(d => d.status === 'expired') 
+                                                        : [];
+
+                                                    return (
+                                                        <tr key={supplier.id} className="hover:bg-slate-50">
+                                                            <td className="px-6 py-4">
+                                                                <div className="font-medium text-slate-900">{supplier.name}</div>
+                                                                {expiredDocs.length > 0 && (
+                                                                    <div className="mt-1 space-y-1">
+                                                                        {expiredDocs.map(d => {
+                                                                            const docName = DOCUMENT_TYPES.find(t => t.id === d.type)?.name || d.type;
+                                                                            return (
+                                                                                <div key={d.id} className="text-xs text-red-600 flex items-center gap-1 font-medium bg-red-50 w-fit px-2 py-0.5 rounded">
+                                                                                    <Icons.AlertTriangle size={10} /> 
+                                                                                    {docName}: Venceu em {new Date(d.expiryDate).toLocaleDateString('pt-BR')}
+                                                                                </div>
+                                                                            );
+                                                                        })}
+                                                                    </div>
+                                                                )}
+                                                            </td>
+                                                            <td className="px-6 py-4"><StatusBadge status={supplier.status} /></td>
+                                                            <td className="px-6 py-4">
+                                                                <button onClick={() => { setSelectedSupplier(supplier); setView('detail'); }} className="text-sm font-bold hover:underline" style={{ color: brandColor }}>Gerenciar</button>
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {filteredSuppliers.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum registro encontrado para este filtro.</div>}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* VIEW: INSUMOS */}
+                        {view === 'insumos' && (
+                            <div className="space-y-6 animate-in">
+                                <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                    <div className="relative w-full sm:w-96">
+                                        <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input type="text" placeholder="Buscar insumo..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': brandColor }} value={searchInsumo} onChange={(e) => setSearchInsumo(e.target.value)} />
+                                    </div>
+                                </div>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {filteredInsumos.map((item, idx) => {
+                                        const qualificados = item.suppliers.filter(s => s.status === 'Qualificado').length;
+                                        return (
+                                            <div key={idx} onClick={() => setSelectedInsumoData(item)} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-shadow">
+                                                <div className="flex items-center gap-3 mb-4">
+                                                    <div className="p-2 rounded-lg bg-slate-100" style={{ color: brandColor }}>
+                                                        <Icons.Package size={24} />
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <span className="text-xs font-bold bg-green-50 text-green-700 px-2 py-1 rounded-lg border border-green-200 flex items-center gap-1">
+                                                        <Icons.ShieldCheck size={12} /> {qualificados} Qualificados
+                                                    </span>
+                                                    <span className="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
+                                                        {item.suppliers.length} Total
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                    {filteredInsumos.length === 0 && (
+                                        <div className="col-span-full p-8 text-center text-slate-500 bg-white rounded-xl border border-slate-200 shadow-sm">
+                                            Nenhum insumo encontrado. Adicione insumos na ficha detalhada dos fornecedores.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                    </main>
+
+                    {/* MODAL DE INSUMO (FORNECEDORES VINCULADOS) */}
+                    {selectedInsumoData && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in">
+                            <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full flex flex-col max-h-[90vh]">
+                                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white rounded-lg shadow-sm" style={{ color: brandColor }}>
+                                            <Icons.Package size={24} />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-xl text-slate-800">{selectedInsumoData.name}</h3>
+                                            <p className="text-xs text-slate-500 font-medium">Fornecedores Vinculados</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setSelectedInsumoData(null)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-200 transition-colors"><Icons.X size={20} /></button>
+                                </div>
+                                <div className="p-6 overflow-y-auto">
+                                    <div className="space-y-3">
+                                        {selectedInsumoData.suppliers.map(sup => (
+                                            <div key={sup.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 p-4 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
+                                                <div>
+                                                    <p className="font-bold text-slate-800">{sup.name}</p>
+                                                    {sup.status === 'Qualificado' 
+                                                        ? <p className="text-xs text-green-600 mt-1 flex items-center gap-1 font-medium"><Icons.CheckCircle size={12}/> Apto para compra</p>
+                                                        : <p className="text-xs text-red-500 mt-1 flex items-center gap-1 font-medium"><Icons.AlertTriangle size={12}/> Pendente de regularização</p>
+                                                    }
+                                                </div>
+                                                <div className="flex items-center gap-4">
+                                                    <StatusBadge status={sup.status} />
+                                                    <button 
+                                                        onClick={() => { 
+                                                            setSelectedInsumoData(null); 
+                                                            setSelectedSupplier(suppliers.find(s => s.id === sup.id)); 
+                                                            setView('detail'); 
+                                                        }} 
+                                                        className="text-sm font-bold bg-white border shadow-sm px-3 py-1.5 rounded-lg transition-colors hover:bg-slate-50" 
+                                                        style={{ color: brandColor, borderColor: brandColor }}>
+                                                        Ficha Técnica
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* MODAL DE DOCUMENTO */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in">
+                            <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
+                                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                    <h3 className="font-bold text-slate-800">{docForm.id ? 'Editar Documento' : 'Novo Documento'}</h3>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><Icons.X size={20} /></button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Tipo de Documento</label>
+                                        <select 
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:border-transparent outline-none"
+                                            style={{ '--tw-ring-color': brandColor }}
+                                            value={docForm.type}
+                                            onChange={(e) => setDocForm({...docForm, type: e.target.value})}
+                                            disabled={!!docForm.id}
+                                        >
+                                            <option value="">Selecione...</option>
+                                            {DOCUMENT_TYPES.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                        </select>
+                                    </div>
+                                    
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Data de Validade</label>
+                                        <input 
+                                            type="date" 
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:border-transparent outline-none"
+                                            style={{ '--tw-ring-color': brandColor }}
+                                            value={docForm.expiryDate}
+                                            onChange={(e) => setDocForm({...docForm, expiryDate: e.target.value})}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Upload Arquivo</label>
+                                        <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition-colors relative">
+                                            <input 
+                                                type="file" 
+                                                accept=".pdf, .jpg, .jpeg, .png"
+                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                onChange={handleFileChange}
+                                            />
+                                            <div className="flex flex-col items-center gap-2 text-slate-500">
+                                                <Icons.Upload size={24} />
+                                                <span className="text-xs">{docForm.fileName || "Clique para selecionar"}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <button 
+                                        onClick={handleSaveDocument}
+                                        className="w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm hover:opacity-90"
+                                        style={{ backgroundColor: brandColor }}
+                                    >
+                                        Salvar Documento
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
