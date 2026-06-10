@@ -114,9 +114,13 @@
             const [isImporting, setIsImporting] = useState(false);
             const [listFilter, setListFilter] = useState('all'); // 'all', 'expired', 'pending', 'qualified'
             
-            // Novos Estados para Insumos
+            // Novos Estados para Insumos e Fornecedores
             const [searchInsumo, setSearchInsumo] = useState("");
             const [selectedInsumoData, setSelectedInsumoData] = useState(null);
+            const [newInsumo, setNewInsumo] = useState('');
+            
+            const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
+            const [newSupplierName, setNewSupplierName] = useState('');
 
             // Branding State
             const [brandColor, setBrandColor] = useState('#1e40af'); // Azul Escuro padrão
@@ -126,9 +130,6 @@
             // Document Modal State
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [docForm, setDocForm] = useState({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
-            
-            // Estado para os Insumos
-            const [newInsumo, setNewInsumo] = useState('');
 
             // Stats
             const stats = useMemo(() => {
@@ -185,7 +186,25 @@
                 setView('list');
             };
 
-            // --- Handlers (Upload CSV) ---
+            // --- Handlers (Fornecedores e Upload CSV) ---
+            const handleSaveNewSupplier = () => {
+                if (!newSupplierName.trim()) {
+                    alert("Por favor, digite o nome do fornecedor.");
+                    return;
+                }
+                const newId = Math.max(...suppliers.map(s => s.id), 0) + 1;
+                const newSup = {
+                    id: newId,
+                    name: newSupplierName.trim().toUpperCase(),
+                    status: "Pendente",
+                    insumos: [],
+                    documents: []
+                };
+                setSuppliers([...suppliers, newSup]);
+                setNewSupplierName("");
+                setIsAddSupplierOpen(false);
+            };
+
             const handleFileUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
@@ -344,6 +363,8 @@
                 const updatedSuppliers = suppliers.map(s => {
                     if (s.id === selectedSupplier.id) {
                         const currentInsumos = s.insumos || [];
+                        // Previne duplicatas
+                        if (currentInsumos.some(i => i.toLowerCase() === newInsumo.trim().toLowerCase())) return s;
                         return { ...s, insumos: [...currentInsumos, newInsumo.trim()] };
                     }
                     return s;
@@ -514,10 +535,17 @@
                                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                     <div className="relative w-full sm:w-96">
                                         <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': brandColor }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                        <input type="text" placeholder="Buscar fornecedor..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': brandColor }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                     </div>
-                                    <div className="flex gap-2 w-full sm:w-auto">
-                                        <label className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors w-full justify-center sm:w-auto shadow-sm hover:opacity-90" style={{ backgroundColor: brandColor }}>
+                                    <div className="flex gap-2 w-full sm:w-auto flex-col sm:flex-row">
+                                        <button 
+                                            onClick={() => setIsAddSupplierOpen(true)}
+                                            className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors w-full justify-center sm:w-auto shadow-sm hover:opacity-90" 
+                                            style={{ backgroundColor: brandColor }}
+                                        >
+                                            <Icons.Plus size={16} /> Novo Fornecedor
+                                        </button>
+                                        <label className="flex items-center gap-2 bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors w-full justify-center sm:w-auto shadow-sm border border-slate-200">
                                             <Icons.Upload size={16} /> {isImporting ? '...' : 'Importar CSV'}
                                             <input type="file" accept=".csv, .xls, .xlsx" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
                                         </label>
@@ -574,6 +602,120 @@
                             </div>
                         )}
 
+                        {/* VIEW: DETALHES DO FORNECEDOR */}
+                        {view === 'detail' && selectedSupplier && (
+                            <div className="bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden animate-in">
+                                <div className="p-6 text-white" style={{ backgroundColor: brandColor }}>
+                                    <button onClick={() => setView('list')} className="text-white/70 hover:text-white text-sm mb-4 flex items-center gap-1">← Voltar</button>
+                                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                        <h2 className="text-2xl font-bold">{selectedSupplier.name}</h2>
+                                        <select value={selectedSupplier.status} onChange={(e) => handleChangeStatus(e.target.value)} className="bg-white/20 text-white border-none rounded-lg px-4 py-2 text-sm backdrop-blur-sm cursor-pointer hover:bg-white/30">
+                                            <option value="Qualificado" className="text-slate-900">Qualificado</option>
+                                            <option value="Em Análise" className="text-slate-900">Em Análise</option>
+                                            <option value="Pendente" className="text-slate-900">Pendente</option>
+                                            <option value="Bloqueado" className="text-slate-900">Bloqueado</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                {/* SEÇÃO: INSUMOS */}
+                                <div className="p-6 border-b border-slate-100 bg-slate-50/50">
+                                    <div className="flex justify-between items-center mb-4">
+                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Icons.Package style={{ color: brandColor }} size={20}/> Insumos Fornecidos</h3>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {(selectedSupplier.insumos || []).map((insumo, idx) => (
+                                            <span key={idx} className="bg-white border border-slate-200 shadow-sm text-slate-700 px-3 py-1.5 rounded-full text-sm flex items-center gap-2 font-medium">
+                                                {insumo}
+                                                <button onClick={() => handleRemoveInsumo(insumo)} className="text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded-full p-0.5 transition-colors">
+                                                    <Icons.X size={14} />
+                                                </button>
+                                            </span>
+                                        ))}
+                                        {(selectedSupplier.insumos || []).length === 0 && (
+                                            <span className="text-sm text-slate-400 italic">Nenhum insumo cadastrado para este fornecedor.</span>
+                                        )}
+                                    </div>
+
+                                    <div className="flex gap-2 max-w-md">
+                                        <input 
+                                            type="text" 
+                                            placeholder="Nome do insumo..." 
+                                            className="flex-1 rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none"
+                                            style={{ '--tw-ring-color': brandColor }}
+                                            value={newInsumo}
+                                            onChange={(e) => setNewInsumo(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && handleAddInsumo()}
+                                        />
+                                        <button 
+                                            onClick={handleAddInsumo}
+                                            className="text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
+                                            style={{ backgroundColor: brandColor }}
+                                        >
+                                            Adicionar Insumo
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                {/* SEÇÃO: DOCUMENTOS */}
+                                <div className="p-6">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Icons.FileText style={{ color: brandColor }} size={20}/> Documentos Regulatórios</h3>
+                                        <button onClick={openAddModal} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: brandColor }}>
+                                            <Icons.Plus size={16} /> Adicionar Doc
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 gap-4">
+                                        {DOCUMENT_TYPES.map(docType => {
+                                            const existingDoc = selectedSupplier.documents.find(d => d.type === docType.id);
+                                            return (
+                                                <div key={docType.id} className={`flex flex-col md:flex-row justify-between items-start md:items-center p-4 rounded-lg border ${existingDoc ? 'border-slate-200 bg-white' : 'border-slate-100 bg-slate-50'}`}>
+                                                    <div className="flex-1 mb-2 md:mb-0">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className={`w-2 h-2 rounded-full ${docType.required ? 'bg-red-500' : 'bg-slate-300'}`} title={docType.required ? "Obrigatório" : "Opcional"}></div>
+                                                            <p className="font-medium text-slate-900">{docType.name}</p>
+                                                        </div>
+                                                        <p className="text-xs text-slate-500 ml-4">{docType.legislation} • {docType.frequency}</p>
+                                                        {existingDoc && existingDoc.fileName && (
+                                                            <p className="text-xs ml-4 mt-1 flex items-center gap-1 font-medium" style={{ color: brandColor }}>
+                                                                <Icons.FileText size={10} /> {existingDoc.fileName}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-3 w-full md:w-auto justify-end">
+                                                        {existingDoc ? (
+                                                            <>
+                                                                <div className="text-right mr-2">
+                                                                    <StatusBadge status={existingDoc.status} />
+                                                                    {existingDoc.expiryDate && <p className="text-[10px] text-slate-400 mt-1">Vence: {new Date(existingDoc.expiryDate).toLocaleDateString('pt-BR')}</p>}
+                                                                </div>
+                                                                {existingDoc.fileData && (
+                                                                    <button onClick={() => handleViewDocument(existingDoc)} title="Ver Arquivo" className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
+                                                                        <Icons.Eye size={18} />
+                                                                    </button>
+                                                                )}
+                                                                <button onClick={() => openEditModal(existingDoc)} title="Editar" className="p-2 text-slate-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg transition-colors">
+                                                                    <Icons.Edit size={18} />
+                                                                </button>
+                                                                <button onClick={() => handleDeleteDocument(existingDoc.id)} title="Excluir" className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
+                                                                    <Icons.Trash2 size={18} />
+                                                                </button>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-400 italic px-2">Pendente</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* VIEW: INSUMOS */}
                         {view === 'insumos' && (
                             <div className="space-y-6 animate-in">
@@ -616,6 +758,39 @@
                         )}
 
                     </main>
+
+                    {/* MODAL NOVO FORNECEDOR */}
+                    {isAddSupplierOpen && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in">
+                            <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden">
+                                <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                                    <h3 className="font-bold text-slate-800">Adicionar Fornecedor</h3>
+                                    <button onClick={() => setIsAddSupplierOpen(false)} className="text-slate-400 hover:text-slate-600"><Icons.X size={20} /></button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Nome/Razão Social da Empresa</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="Ex: M. Dias Branco S/A..."
+                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:border-transparent outline-none"
+                                            style={{ '--tw-ring-color': brandColor }}
+                                            value={newSupplierName}
+                                            onChange={(e) => setNewSupplierName(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && handleSaveNewSupplier()}
+                                        />
+                                    </div>
+                                    <button 
+                                        onClick={handleSaveNewSupplier}
+                                        className="w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm hover:opacity-90"
+                                        style={{ backgroundColor: brandColor }}
+                                    >
+                                        Salvar Fornecedor
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* MODAL DE INSUMO (FORNECEDORES VINCULADOS) */}
                     {selectedInsumoData && (
