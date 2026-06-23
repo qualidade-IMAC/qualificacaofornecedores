@@ -8,21 +8,23 @@
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- React & ReactDOM -->
-    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- React & ReactDOM (Versões de Produção Estáveis) -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
     
     <!-- Babel para JSX -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.6/babel.min.js"></script>
     
     <!-- SheetJS para ler Excel/CSV -->
-    <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <!-- Estilos Extras -->
     <style>
         body { font-family: 'Inter', sans-serif; }
-        .animate-in { animation: fadeIn 0.4s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-in { animation: fadeIn 0.3s ease-out forwards; }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
         
         /* Custom Scrollbar */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -34,13 +36,9 @@
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
 
-    <script type="text/babel" data-presets="env,react">
-        /** @jsx React.createElement */
-        /** @jsxFrag React.Fragment */
-        
-        const { useState, useMemo, useEffect, useRef } = React;
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
 
-        // --- Ícones ---
         const Icons = {
             ShieldCheck: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>,
             AlertTriangle: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>,
@@ -57,10 +55,10 @@
             X: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>,
             Settings: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
             FilterX: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M13.013 17.653 21 17.65"/><path d="M18.886 19.687 21 17.65 18.886 15.614"/><path d="M2.384 10.435a2.1 2.1 0 0 1 0-2.83l5.962-6.198a2.12 2.12 0 0 1 3.012 0l5.885 6.12a2.1 2.1 0 0 1 0 2.83l-5.961 6.199a2.12 2.12 0 0 1-3.013 0z"/><path d="M11.69 16.55 10 18"/></svg>,
-            Package: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+            Package: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>,
+            Info: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
         };
 
-        // --- Configuração ---
         const DOCUMENT_TYPES = [
             { id: 'alvara_func', name: '1. Alvará de Funcionamento', frequency: 'Anual', required: true, legislation: 'Municipal' },
             { id: 'licenca_san', name: '2. Licença Sanitária', frequency: 'Anual', required: true, legislation: 'RDC 275/2002' },
@@ -72,13 +70,9 @@
             { id: 'laudo', name: '8. Laudo de Análise do Produto', frequency: 'Por Lote', required: true, legislation: 'Controle de Qualidade' }
         ];
 
-        // --- Dados Iniciais Mockados ---
         const INITIAL_SUPPLIERS = [
             {
-                id: 1,
-                name: "GRANDE MOINHO CEARENSE S A",
-                status: "Qualificado",
-                insumos: ["Farinha de Trigo Especial", "Mistura para Bolo"],
+                id: 1, name: "GRANDE MOINHO CEARENSE S A", status: "Qualificado", insumos: ["Farinha de Trigo Especial", "Mistura para Bolo"],
                 documents: [
                     { id: 'd1', type: 'alvara_func', issueDate: '2024-01-10', expiryDate: '2025-01-10', status: 'valid', fileName: 'alvara_2024.pdf' },
                     { id: 'd2', type: 'licenca_san', issueDate: '2024-02-15', expiryDate: '2025-02-15', status: 'valid', fileName: 'licenca_sanitaria.pdf' },
@@ -86,20 +80,14 @@
                 ]
             },
             {
-                id: 2,
-                name: "NESTLE BRASIL LTDA",
-                status: "Pendente",
-                insumos: ["Cacau em Pó", "Leite Condensado"],
+                id: 2, name: "NESTLE BRASIL LTDA", status: "Pendente", insumos: ["Cacau em Pó", "Leite Condensado"],
                 documents: [
                     { id: 'd4', type: 'sif_sie', issueDate: '2020-01-01', expiryDate: '2030-01-01', status: 'valid', fileName: 'registro_sif.pdf' },
                     { id: 'd5', type: 'agua_micro', issueDate: '2024-01-01', expiryDate: '2024-02-01', status: 'expired', fileName: 'agua_jan.pdf' }
                 ]
             },
             {
-                id: 3,
-                name: "BRF S.A.",
-                status: "Em Análise",
-                insumos: ["Peito de Frango Desfiado", "Margarina Folhada"],
+                id: 3, name: "BRF S.A.", status: "Em Análise", insumos: ["Peito de Frango Desfiado", "Margarina Folhada"],
                 documents: [
                     { id: 'd6', type: 'ficha', issueDate: '2024-01-01', expiryDate: '', status: 'valid', fileName: 'ficha_tecnica_frango.pdf' },
                     { id: 'd7', type: 'laudo', issueDate: '2024-06-01', expiryDate: '', status: 'valid', fileName: 'laudo_lote_123.pdf' }
@@ -107,7 +95,6 @@
             }
         ];
 
-        // --- Componentes Compartilhados ---
         const StatusBadge = ({ status }) => {
             const styles = {
                 'Qualificado': 'bg-green-100 text-green-800 border-green-200',
@@ -137,33 +124,34 @@
             </div>
         );
 
-        // --- App Principal ---
         function App() {
+            // States principais
             const [suppliers, setSuppliers] = useState(INITIAL_SUPPLIERS);
             const [selectedSupplier, setSelectedSupplier] = useState(null);
             const [searchTerm, setSearchTerm] = useState("");
-            const [view, setView] = useState('dashboard');
+            const [view, setView] = useState('dashboard'); // dashboard, list, detail, insumos
             const [isImporting, setIsImporting] = useState(false);
-            const [listFilter, setListFilter] = useState('all'); // 'all', 'expired', 'pending', 'qualified'
+            const [listFilter, setListFilter] = useState('all'); 
             
-            // Novos Estados para Insumos e Fornecedores
+            // Insumos e Fornecedores States
             const [searchInsumo, setSearchInsumo] = useState("");
             const [selectedInsumoData, setSelectedInsumoData] = useState(null);
             const [newInsumo, setNewInsumo] = useState('');
-            
             const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
             const [newSupplierName, setNewSupplierName] = useState('');
 
             // Branding State
-            const [brandColor, setBrandColor] = useState('#1e40af'); // Azul Escuro padrão
+            const [brandColor, setBrandColor] = useState('#1e40af');
             const [logoUrl, setLogoUrl] = useState(null);
             const [showSettings, setShowSettings] = useState(false);
 
-            // Document Modal State
+            // Modals e Toasts (Substituindo alerts e confirms nativos)
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [docForm, setDocForm] = useState({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
+            const [toastInfo, setToastInfo] = useState(null); 
+            const [confirmDialog, setConfirmDialog] = useState(null); 
+            const [viewDocMode, setViewDocMode] = useState(null);
 
-            // Stats
             const stats = useMemo(() => {
                 const total = suppliers.length;
                 const qualified = suppliers.filter(s => s.status === 'Qualificado').length;
@@ -173,34 +161,24 @@
                 return { total, qualified, expiredDocs, pendingReview };
             }, [suppliers]);
 
-            // Filter Logic
             const filteredSuppliers = useMemo(() => {
                 return suppliers.filter(s => {
                     const matchesSearch = s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase());
-                    
                     let matchesFilter = true;
-                    if (listFilter === 'expired') {
-                        matchesFilter = s.documents.some(d => d.status === 'expired');
-                    } else if (listFilter === 'pending') {
-                        matchesFilter = s.status === 'Pendente' || s.status === 'Em Análise';
-                    } else if (listFilter === 'qualified') {
-                        matchesFilter = s.status === 'Qualificado';
-                    }
-
+                    if (listFilter === 'expired') matchesFilter = s.documents.some(d => d.status === 'expired');
+                    else if (listFilter === 'pending') matchesFilter = s.status === 'Pendente' || s.status === 'Em Análise';
+                    else if (listFilter === 'qualified') matchesFilter = s.status === 'Qualificado';
                     return matchesSearch && matchesFilter;
                 });
             }, [suppliers, searchTerm, listFilter]);
 
-            // Lógica de Agrupamento de Insumos
             const insumosData = useMemo(() => {
                 const map = new Map();
                 suppliers.forEach(supplier => {
                     if (supplier.insumos && Array.isArray(supplier.insumos)) {
                         supplier.insumos.forEach(insumo => {
                             const key = insumo.trim().toUpperCase();
-                            if (!map.has(key)) {
-                                map.set(key, { name: insumo.trim(), suppliers: [] });
-                            }
+                            if (!map.has(key)) map.set(key, { name: insumo.trim(), suppliers: [] });
                             map.get(key).suppliers.push(supplier);
                         });
                     }
@@ -212,29 +190,29 @@
                 return insumosData.filter(i => i.name.toLowerCase().includes(searchInsumo.toLowerCase()));
             }, [insumosData, searchInsumo]);
 
-            // --- Navigation Handlers ---
+            // Custom UI Helpers
+            const showToast = (message, type = 'info') => {
+                setToastInfo({ message, type });
+                setTimeout(() => setToastInfo(null), 3500);
+            };
+
             const handleDashboardClick = (filterType) => {
                 setListFilter(filterType);
                 setView('list');
             };
 
-            // --- Handlers (Fornecedores e Upload CSV) ---
+            // Fornecedores
             const handleSaveNewSupplier = () => {
                 if (!newSupplierName.trim()) {
-                    alert("Por favor, digite o nome do fornecedor.");
+                    showToast("Por favor, digite o nome do fornecedor.", "error");
                     return;
                 }
                 const newId = Math.max(...suppliers.map(s => s.id), 0) + 1;
-                const newSup = {
-                    id: newId,
-                    name: newSupplierName.trim().toUpperCase(),
-                    status: "Pendente",
-                    insumos: [],
-                    documents: []
-                };
+                const newSup = { id: newId, name: newSupplierName.trim().toUpperCase(), status: "Pendente", insumos: [], documents: [] };
                 setSuppliers([...suppliers, newSup]);
                 setNewSupplierName("");
                 setIsAddSupplierOpen(false);
+                showToast("Fornecedor cadastrado com sucesso!", "success");
             };
 
             const handleFileUpload = (e) => {
@@ -265,12 +243,12 @@
 
                         if (newSuppliers.length > 0) {
                             setSuppliers(prev => [...prev, ...newSuppliers]);
-                            alert(`${newSuppliers.length} fornecedores importados!`);
+                            showToast(`${newSuppliers.length} fornecedores importados!`, "success");
                         } else {
-                            alert("Nenhum fornecedor novo encontrado.");
+                            showToast("Nenhum fornecedor novo encontrado.", "info");
                         }
                     } catch (error) {
-                        alert("Erro ao ler planilha.");
+                        showToast("Erro ao ler planilha.", "error");
                     } finally {
                         setIsImporting(false);
                     }
@@ -278,72 +256,39 @@
                 reader.readAsBinaryString(file);
             };
 
-            // --- Handlers (Docs) ---
-            const openAddModal = () => {
-                setDocForm({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
-                setIsModalOpen(true);
-            };
-
-            const openEditModal = (doc) => {
-                setDocForm({
-                    id: doc.id,
-                    type: doc.type,
-                    expiryDate: doc.expiryDate || '',
-                    fileData: doc.fileData, 
-                    fileName: doc.fileName
-                });
-                setIsModalOpen(true);
-            };
-
+            // Documentos
             const handleFileChange = (e) => {
                 const file = e.target.files[0];
                 if (file) {
                     const reader = new FileReader();
-                    reader.onloadend = () => {
-                        setDocForm(prev => ({
-                            ...prev,
-                            fileData: reader.result, 
-                            fileName: file.name
-                        }));
-                    };
+                    reader.onloadend = () => setDocForm(prev => ({ ...prev, fileData: reader.result, fileName: file.name }));
                     reader.readAsDataURL(file);
                 }
             };
 
             const handleSaveDocument = () => {
                 if (!selectedSupplier || !docForm.type) {
-                    alert("Selecione o tipo de documento.");
+                    showToast("Selecione o tipo de documento.", "error");
                     return;
                 }
                 let status = 'valid';
                 if (docForm.expiryDate) {
-                    const today = new Date();
-                    const expiry = new Date(docForm.expiryDate);
-                    const diffTime = expiry - today;
-                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    const diffDays = Math.ceil((new Date(docForm.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
                     if (diffDays < 0) status = 'expired';
                     else if (diffDays < 30) status = 'warning';
                 }
 
                 const docPayload = {
                     id: docForm.id || Date.now().toString(),
-                    type: docForm.type,
-                    issueDate: new Date().toISOString().split('T')[0],
-                    expiryDate: docForm.expiryDate,
-                    status: status,
-                    fileData: docForm.fileData,
-                    fileName: docForm.fileName
+                    type: docForm.type, issueDate: new Date().toISOString().split('T')[0],
+                    expiryDate: docForm.expiryDate, status: status, fileData: docForm.fileData, fileName: docForm.fileName
                 };
 
                 const updatedSuppliers = suppliers.map(s => {
                     if (s.id === selectedSupplier.id) {
-                        let newDocs;
-                        if (docForm.id) {
-                            newDocs = s.documents.map(d => d.id === docForm.id ? { ...d, ...docPayload } : d);
-                        } else {
-                            const others = s.documents.filter(d => d.type !== docForm.type);
-                            newDocs = [...others, docPayload];
-                        }
+                        let newDocs = docForm.id 
+                            ? s.documents.map(d => d.id === docForm.id ? { ...d, ...docPayload } : d)
+                            : [...s.documents.filter(d => d.type !== docForm.type), docPayload];
                         return { ...s, documents: newDocs };
                     }
                     return s;
@@ -351,55 +296,36 @@
                 setSuppliers(updatedSuppliers);
                 setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
                 setIsModalOpen(false);
+                showToast("Documento salvo!", "success");
             };
 
-            const handleDeleteDocument = (docId) => {
-                if (!confirm("Tem certeza que deseja excluir este documento?")) return;
-                const updatedSuppliers = suppliers.map(s => {
-                    if (s.id === selectedSupplier.id) {
-                        return { ...s, documents: s.documents.filter(d => d.id !== docId) };
+            const confirmDeleteDocument = (docId) => {
+                setConfirmDialog({
+                    message: "Tem certeza que deseja excluir este documento?",
+                    onConfirm: () => {
+                        const updatedSuppliers = suppliers.map(s => {
+                            if (s.id === selectedSupplier.id) return { ...s, documents: s.documents.filter(d => d.id !== docId) };
+                            return s;
+                        });
+                        setSuppliers(updatedSuppliers);
+                        setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
+                        setConfirmDialog(null);
+                        showToast("Documento excluído.", "info");
                     }
-                    return s;
                 });
-                setSuppliers(updatedSuppliers);
-                setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
-            };
-
-            const handleLogoUpload = (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => setLogoUrl(reader.result);
-                    reader.readAsDataURL(file);
-                }
             };
 
             const handleViewDocument = (doc) => {
-                if (doc.fileData) {
-                    const win = window.open();
-                    if (win) {
-                        win.document.write(`<iframe src="${doc.fileData}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
-                    } else {
-                        alert("Por favor, permita pop-ups para visualizar o documento.");
-                    }
-                } else {
-                    alert("Este documento não possui arquivo digital anexado.");
-                }
+                if (doc.fileData) setViewDocMode(doc.fileData);
+                else showToast("Este documento não possui arquivo digital anexado.", "error");
             };
 
-            const handleChangeStatus = (newStatus) => {
-                if (!selectedSupplier) return;
-                const updatedSuppliers = suppliers.map(s => s.id === selectedSupplier.id ? { ...s, status: newStatus } : s);
-                setSuppliers(updatedSuppliers);
-                setSelectedSupplier({ ...selectedSupplier, status: newStatus });
-            };
-
+            // Insumos
             const handleAddInsumo = () => {
                 if (!newInsumo.trim() || !selectedSupplier) return;
                 const updatedSuppliers = suppliers.map(s => {
                     if (s.id === selectedSupplier.id) {
                         const currentInsumos = s.insumos || [];
-                        // Previne duplicatas
                         if (currentInsumos.some(i => i.toLowerCase() === newInsumo.trim().toLowerCase())) return s;
                         return { ...s, insumos: [...currentInsumos, newInsumo.trim()] };
                     }
@@ -413,32 +339,24 @@
             const handleRemoveInsumo = (insumoToRemove) => {
                 if (!selectedSupplier) return;
                 const updatedSuppliers = suppliers.map(s => {
-                    if (s.id === selectedSupplier.id) {
-                        return { ...s, insumos: (s.insumos || []).filter(i => i !== insumoToRemove) };
-                    }
+                    if (s.id === selectedSupplier.id) return { ...s, insumos: (s.insumos || []).filter(i => i !== insumoToRemove) };
                     return s;
                 });
                 setSuppliers(updatedSuppliers);
                 setSelectedSupplier(updatedSuppliers.find(s => s.id === selectedSupplier.id));
             };
 
-            // --- Render ---
             return (
-                <div className="min-h-screen bg-slate-50 relative font-sans text-slate-900">
-                    {/* Header Dinâmico */}
-                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm transition-colors duration-300">
+                <div className="min-h-screen bg-slate-50 relative font-sans text-slate-900 pb-20">
+                    
+                    {/* Header */}
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
                         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                             <div className="flex justify-between items-center h-16">
                                 <div className="flex items-center gap-3">
-                                    {logoUrl ? (
-                                        <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
-                                    ) : (
-                                        <div style={{ color: brandColor }}><Icons.ShieldCheck size={32} /></div>
-                                    )}
+                                    {logoUrl ? <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" /> : <div style={{ color: brandColor }}><Icons.ShieldCheck size={32} /></div>}
                                     <div>
-                                        <h1 className="text-xl font-bold tracking-tight" style={{ color: brandColor }}>
-                                            IMAC
-                                        </h1>
+                                        <h1 className="text-xl font-bold tracking-tight" style={{ color: brandColor }}>IMAC</h1>
                                         <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Controle de Qualidade</p>
                                     </div>
                                 </div>
@@ -449,9 +367,7 @@
                                         <button onClick={() => setView('insumos')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'insumos' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'insumos' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Insumos</button>
                                     </nav>
                                     <div className="h-6 w-px bg-slate-200"></div>
-                                    <button onClick={() => setShowSettings(!showSettings)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100" title="Configurações de Marca">
-                                        <Icons.Settings size={20} />
-                                    </button>
+                                    <button onClick={() => setShowSettings(!showSettings)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-100"><Icons.Settings size={20} /></button>
                                 </div>
                             </div>
                         </div>
@@ -465,12 +381,11 @@
                                     <label className="block text-xs font-bold text-slate-500 mb-1">COR DA MARCA</label>
                                     <div className="flex gap-2">
                                         <input type="color" value={brandColor} onChange={(e) => setBrandColor(e.target.value)} className="h-8 w-16 cursor-pointer border rounded" />
-                                        <span className="text-xs text-slate-400 self-center">{brandColor}</span>
                                     </div>
                                 </div>
                                 <div className="flex-1 w-full">
                                     <label className="block text-xs font-bold text-slate-500 mb-1">LOGO DA EMPRESA</label>
-                                    <input type="file" accept="image/*" onChange={handleLogoUpload} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700 hover:file:bg-slate-200" />
+                                    <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files[0]; if(f){ const r = new FileReader(); r.onloadend = () => setLogoUrl(r.result); r.readAsDataURL(f); }}} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-slate-100 file:text-slate-700" />
                                 </div>
                             </div>
                         </div>
@@ -486,29 +401,12 @@
                                     </div>
                                     <Icons.BarChart3 className="absolute right-8 bottom-[-20px] text-white/10 w-40 h-40" />
                                 </div>
-
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                    <Card 
-                                        onClick={() => handleDashboardClick('all')} 
-                                        title="Total" value={stats.total} icon={Icons.Users} colorClass="bg-slate-100 text-slate-600" 
-                                    />
-                                    <Card 
-                                        onClick={() => handleDashboardClick('qualified')}
-                                        title="Qualificados" value={`${stats.total ? ((stats.qualified / stats.total) * 100).toFixed(0) : 0}%`} icon={Icons.ShieldCheck} colorClass="bg-green-50 text-green-600" 
-                                    />
-                                    <Card 
-                                        onClick={() => handleDashboardClick('expired')}
-                                        title="Docs. Vencidos" value={stats.expiredDocs} icon={Icons.AlertTriangle} colorClass="bg-red-50 text-red-600" subtext="Clique para ver detalhes"
-                                    />
-                                    <Card 
-                                        onClick={() => handleDashboardClick('pending')}
-                                        title="Pendentes" value={stats.pendingReview} icon={Icons.FileText} colorClass="bg-yellow-50 text-yellow-600" subtext="Clique para ver detalhes"
-                                    />
+                                    <Card onClick={() => handleDashboardClick('all')} title="Total" value={stats.total} icon={Icons.Users} colorClass="bg-slate-100 text-slate-600" />
+                                    <Card onClick={() => handleDashboardClick('qualified')} title="Qualificados" value={`${stats.total ? ((stats.qualified / stats.total) * 100).toFixed(0) : 0}%`} icon={Icons.ShieldCheck} colorClass="bg-green-50 text-green-600" />
+                                    <Card onClick={() => handleDashboardClick('expired')} title="Docs. Vencidos" value={stats.expiredDocs} icon={Icons.AlertTriangle} colorClass="bg-red-50 text-red-600" subtext="Clique para ver detalhes" />
+                                    <Card onClick={() => handleDashboardClick('pending')} title="Pendentes" value={stats.pendingReview} icon={Icons.FileText} colorClass="bg-yellow-50 text-yellow-600" subtext="Clique para ver detalhes" />
                                 </div>
-                                
-                                <footer className="mt-12 text-center text-xs text-slate-400 border-t border-slate-200 pt-4">
-                                    <p>© {new Date().getFullYear()} IMAC Indústria de Massas Congeladas Ltda. Todos os direitos reservados.</p>
-                                </footer>
                             </div>
                         )}
 
@@ -519,44 +417,24 @@
                                     <div className="bg-slate-800 text-white px-4 py-3 rounded-lg flex items-center justify-between shadow-md">
                                         <div className="flex items-center gap-2">
                                             <Icons.FilterX size={20} className="text-slate-300" />
-                                            <span className="text-sm font-medium">
-                                                Filtrando por: 
-                                                <span className="font-bold ml-1 text-white">
-                                                    {listFilter === 'expired' && 'Documentos Vencidos'}
-                                                    {listFilter === 'pending' && 'Pendentes de Análise'}
-                                                    {listFilter === 'qualified' && 'Fornecedores Qualificados'}
-                                                </span>
-                                            </span>
+                                            <span className="text-sm font-medium">Filtrando por: <span className="font-bold ml-1 text-white">{listFilter === 'expired' ? 'Documentos Vencidos' : listFilter === 'pending' ? 'Pendentes de Análise' : 'Fornecedores Qualificados'}</span></span>
                                         </div>
-                                        <button 
-                                            onClick={() => setListFilter('all')}
-                                            className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full transition-colors font-semibold"
-                                        >
-                                            Limpar Filtros
-                                        </button>
+                                        <button onClick={() => setListFilter('all')} className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-full font-semibold">Limpar</button>
                                     </div>
                                 )}
-
                                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                     <div className="relative w-full sm:w-96">
                                         <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input type="text" placeholder="Buscar fornecedor..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': brandColor }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                                        <input type="text" placeholder="Buscar..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 outline-none focus:border-transparent focus:ring-2" style={{ '--tw-ring-color': brandColor }} value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                                     </div>
                                     <div className="flex gap-2 w-full sm:w-auto flex-col sm:flex-row">
-                                        <button 
-                                            onClick={() => setIsAddSupplierOpen(true)}
-                                            className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors w-full justify-center sm:w-auto shadow-sm hover:opacity-90" 
-                                            style={{ backgroundColor: brandColor }}
-                                        >
-                                            <Icons.Plus size={16} /> Novo Fornecedor
-                                        </button>
-                                        <label className="flex items-center gap-2 bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer transition-colors w-full justify-center sm:w-auto shadow-sm border border-slate-200">
-                                            <Icons.Upload size={16} /> {isImporting ? '...' : 'Importar CSV'}
+                                        <button onClick={() => setIsAddSupplierOpen(true)} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm hover:opacity-90 justify-center" style={{ backgroundColor: brandColor }}><Icons.Plus size={16} /> Novo</button>
+                                        <label className="flex items-center gap-2 bg-slate-100 text-slate-700 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-medium cursor-pointer shadow-sm border border-slate-200 justify-center">
+                                            <Icons.Upload size={16} /> {isImporting ? '...' : 'CSV'}
                                             <input type="file" accept=".csv, .xls, .xlsx" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
                                         </label>
                                     </div>
                                 </div>
-
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                                     <div className="overflow-x-auto">
                                         <table className="w-full text-left border-collapse">
@@ -569,39 +447,26 @@
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
                                                 {filteredSuppliers.map(supplier => {
-                                                    const expiredDocs = listFilter === 'expired' 
-                                                        ? supplier.documents.filter(d => d.status === 'expired') 
-                                                        : [];
-
+                                                    const expiredDocs = listFilter === 'expired' ? supplier.documents.filter(d => d.status === 'expired') : [];
                                                     return (
                                                         <tr key={supplier.id} className="hover:bg-slate-50">
                                                             <td className="px-6 py-4">
                                                                 <div className="font-medium text-slate-900">{supplier.name}</div>
                                                                 {expiredDocs.length > 0 && (
                                                                     <div className="mt-1 space-y-1">
-                                                                        {expiredDocs.map(d => {
-                                                                            const docName = DOCUMENT_TYPES.find(t => t.id === d.type)?.name || d.type;
-                                                                            return (
-                                                                                <div key={d.id} className="text-xs text-red-600 flex items-center gap-1 font-medium bg-red-50 w-fit px-2 py-0.5 rounded">
-                                                                                    <Icons.AlertTriangle size={10} /> 
-                                                                                    {docName}: Venceu em {new Date(d.expiryDate).toLocaleDateString('pt-BR')}
-                                                                                </div>
-                                                                            );
-                                                                        })}
+                                                                        {expiredDocs.map(d => <div key={d.id} className="text-xs text-red-600 flex items-center gap-1 font-medium bg-red-50 w-fit px-2 py-0.5 rounded"><Icons.AlertTriangle size={10} /> {(DOCUMENT_TYPES.find(t => t.id === d.type)?.name || d.type)}: Venceu em {new Date(d.expiryDate).toLocaleDateString('pt-BR')}</div>)}
                                                                     </div>
                                                                 )}
                                                             </td>
                                                             <td className="px-6 py-4"><StatusBadge status={supplier.status} /></td>
-                                                            <td className="px-6 py-4">
-                                                                <button onClick={() => { setSelectedSupplier(supplier); setView('detail'); }} className="text-sm font-bold hover:underline" style={{ color: brandColor }}>Gerenciar</button>
-                                                            </td>
+                                                            <td className="px-6 py-4"><button onClick={() => { setSelectedSupplier(supplier); setView('detail'); }} className="text-sm font-bold hover:underline" style={{ color: brandColor }}>Gerenciar</button></td>
                                                         </tr>
                                                     );
                                                 })}
                                             </tbody>
                                         </table>
                                     </div>
-                                    {filteredSuppliers.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum registro encontrado para este filtro.</div>}
+                                    {filteredSuppliers.length === 0 && <div className="p-8 text-center text-slate-500">Nenhum registro encontrado.</div>}
                                 </div>
                             </div>
                         )}
@@ -613,7 +478,10 @@
                                     <button onClick={() => setView('list')} className="text-white/70 hover:text-white text-sm mb-4 flex items-center gap-1">← Voltar</button>
                                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                                         <h2 className="text-2xl font-bold">{selectedSupplier.name}</h2>
-                                        <select value={selectedSupplier.status} onChange={(e) => handleChangeStatus(e.target.value)} className="bg-white/20 text-white border-none rounded-lg px-4 py-2 text-sm backdrop-blur-sm cursor-pointer hover:bg-white/30">
+                                        <select value={selectedSupplier.status} onChange={(e) => {
+                                            const updated = suppliers.map(s => s.id === selectedSupplier.id ? { ...s, status: e.target.value } : s);
+                                            setSuppliers(updated); setSelectedSupplier({ ...selectedSupplier, status: e.target.value });
+                                        }} className="bg-white/20 text-white border-none rounded-lg px-4 py-2 text-sm backdrop-blur-sm cursor-pointer outline-none">
                                             <option value="Qualificado" className="text-slate-900">Qualificado</option>
                                             <option value="Em Análise" className="text-slate-900">Em Análise</option>
                                             <option value="Pendente" className="text-slate-900">Pendente</option>
@@ -622,55 +490,27 @@
                                     </div>
                                 </div>
 
-                                {/* SEÇÃO: INSUMOS */}
                                 <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-                                    <div className="flex justify-between items-center mb-4">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Icons.Package style={{ color: brandColor }} size={20}/> Insumos Fornecidos</h3>
-                                    </div>
-                                    
+                                    <h3 className="font-semibold text-lg flex items-center gap-2 mb-4"><Icons.Package style={{ color: brandColor }} size={20}/> Insumos Fornecidos</h3>
                                     <div className="flex flex-wrap gap-2 mb-4">
                                         {(selectedSupplier.insumos || []).map((insumo, idx) => (
                                             <span key={idx} className="bg-white border border-slate-200 shadow-sm text-slate-700 px-3 py-1.5 rounded-full text-sm flex items-center gap-2 font-medium">
-                                                {insumo}
-                                                <button onClick={() => handleRemoveInsumo(insumo)} className="text-slate-400 hover:text-red-500 bg-slate-100 hover:bg-red-50 rounded-full p-0.5 transition-colors">
-                                                    <Icons.X size={14} />
-                                                </button>
+                                                {insumo} <button onClick={() => handleRemoveInsumo(insumo)} className="text-slate-400 hover:text-red-500"><Icons.X size={14} /></button>
                                             </span>
                                         ))}
-                                        {(selectedSupplier.insumos || []).length === 0 && (
-                                            <span className="text-sm text-slate-400 italic">Nenhum insumo cadastrado para este fornecedor.</span>
-                                        )}
+                                        {(selectedSupplier.insumos || []).length === 0 && <span className="text-sm text-slate-400 italic">Nenhum insumo.</span>}
                                     </div>
-
                                     <div className="flex gap-2 max-w-md">
-                                        <input 
-                                            type="text" 
-                                            placeholder="Nome do insumo..." 
-                                            className="flex-1 rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-opacity-50 outline-none"
-                                            style={{ '--tw-ring-color': brandColor }}
-                                            value={newInsumo}
-                                            onChange={(e) => setNewInsumo(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && handleAddInsumo()}
-                                        />
-                                        <button 
-                                            onClick={handleAddInsumo}
-                                            className="text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity whitespace-nowrap"
-                                            style={{ backgroundColor: brandColor }}
-                                        >
-                                            Adicionar Insumo
-                                        </button>
+                                        <input type="text" placeholder="Nome do insumo..." className="flex-1 rounded-lg border border-slate-300 p-2 text-sm outline-none focus:ring-2" style={{ '--tw-ring-color': brandColor }} value={newInsumo} onChange={(e) => setNewInsumo(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleAddInsumo()} />
+                                        <button onClick={handleAddInsumo} className="text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: brandColor }}>Adicionar</button>
                                     </div>
                                 </div>
                                 
-                                {/* SEÇÃO: DOCUMENTOS */}
                                 <div className="p-6">
                                     <div className="flex justify-between items-center mb-6">
-                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Icons.FileText style={{ color: brandColor }} size={20}/> Documentos Regulatórios</h3>
-                                        <button onClick={openAddModal} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-opacity" style={{ backgroundColor: brandColor }}>
-                                            <Icons.Plus size={16} /> Adicionar Doc
-                                        </button>
+                                        <h3 className="font-semibold text-lg flex items-center gap-2"><Icons.FileText style={{ color: brandColor }} size={20}/> Documentos</h3>
+                                        <button onClick={() => { setDocForm({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' }); setIsModalOpen(true); }} className="flex items-center gap-2 text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90" style={{ backgroundColor: brandColor }}><Icons.Plus size={16} /> Adicionar Doc</button>
                                     </div>
-
                                     <div className="grid grid-cols-1 gap-4">
                                         {DOCUMENT_TYPES.map(docType => {
                                             const existingDoc = selectedSupplier.documents.find(d => d.type === docType.id);
@@ -682,13 +522,8 @@
                                                             <p className="font-medium text-slate-900">{docType.name}</p>
                                                         </div>
                                                         <p className="text-xs text-slate-500 ml-4">{docType.legislation} • {docType.frequency}</p>
-                                                        {existingDoc && existingDoc.fileName && (
-                                                            <p className="text-xs ml-4 mt-1 flex items-center gap-1 font-medium" style={{ color: brandColor }}>
-                                                                <Icons.FileText size={10} /> {existingDoc.fileName}
-                                                            </p>
-                                                        )}
+                                                        {existingDoc?.fileName && <p className="text-xs ml-4 mt-1 flex items-center gap-1 font-medium" style={{ color: brandColor }}><Icons.FileText size={10} /> {existingDoc.fileName}</p>}
                                                     </div>
-                                                    
                                                     <div className="flex items-center gap-3 w-full md:w-auto justify-end">
                                                         {existingDoc ? (
                                                             <>
@@ -696,21 +531,11 @@
                                                                     <StatusBadge status={existingDoc.status} />
                                                                     {existingDoc.expiryDate && <p className="text-[10px] text-slate-400 mt-1">Vence: {new Date(existingDoc.expiryDate).toLocaleDateString('pt-BR')}</p>}
                                                                 </div>
-                                                                {existingDoc.fileData && (
-                                                                    <button onClick={() => handleViewDocument(existingDoc)} title="Ver Arquivo" className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors">
-                                                                        <Icons.Eye size={18} />
-                                                                    </button>
-                                                                )}
-                                                                <button onClick={() => openEditModal(existingDoc)} title="Editar" className="p-2 text-slate-500 hover:bg-orange-50 hover:text-orange-600 rounded-lg transition-colors">
-                                                                    <Icons.Edit size={18} />
-                                                                </button>
-                                                                <button onClick={() => handleDeleteDocument(existingDoc.id)} title="Excluir" className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors">
-                                                                    <Icons.Trash2 size={18} />
-                                                                </button>
+                                                                {existingDoc.fileData && <button onClick={() => handleViewDocument(existingDoc)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><Icons.Eye size={18} /></button>}
+                                                                <button onClick={() => { setDocForm({...existingDoc}); setIsModalOpen(true); }} className="p-2 text-slate-500 hover:bg-orange-50 rounded-lg"><Icons.Edit size={18} /></button>
+                                                                <button onClick={() => confirmDeleteDocument(existingDoc.id)} className="p-2 text-slate-500 hover:bg-red-50 hover:text-red-600 rounded-lg"><Icons.Trash2 size={18} /></button>
                                                             </>
-                                                        ) : (
-                                                            <span className="text-xs text-slate-400 italic px-2">Pendente</span>
-                                                        )}
+                                                        ) : <span className="text-xs text-slate-400 italic px-2">Pendente</span>}
                                                     </div>
                                                 </div>
                                             );
@@ -726,44 +551,30 @@
                                 <div className="flex flex-col sm:flex-row justify-between items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                     <div className="relative w-full sm:w-96">
                                         <Icons.Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                        <input type="text" placeholder="Buscar insumo..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-opacity-50" style={{ '--tw-ring-color': brandColor }} value={searchInsumo} onChange={(e) => setSearchInsumo(e.target.value)} />
+                                        <input type="text" placeholder="Buscar insumo..." className="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 outline-none focus:ring-2" style={{ '--tw-ring-color': brandColor }} value={searchInsumo} onChange={(e) => setSearchInsumo(e.target.value)} />
                                     </div>
                                 </div>
-                                
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                    {filteredInsumos.map((item, idx) => {
-                                        const qualificados = item.suppliers.filter(s => s.status === 'Qualificado').length;
-                                        return (
-                                            <div key={idx} onClick={() => setSelectedInsumoData(item)} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer transition-shadow">
-                                                <div className="flex items-center gap-3 mb-4">
-                                                    <div className="p-2 rounded-lg bg-slate-100" style={{ color: brandColor }}>
-                                                        <Icons.Package size={24} />
-                                                    </div>
-                                                    <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
-                                                </div>
-                                                <div className="flex gap-2">
-                                                    <span className="text-xs font-bold bg-green-50 text-green-700 px-2 py-1 rounded-lg border border-green-200 flex items-center gap-1">
-                                                        <Icons.ShieldCheck size={12} /> {qualificados} Qualificados
-                                                    </span>
-                                                    <span className="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">
-                                                        {item.suppliers.length} Total
-                                                    </span>
-                                                </div>
+                                    {filteredInsumos.map((item, idx) => (
+                                        <div key={idx} onClick={() => setSelectedInsumoData(item)} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md cursor-pointer">
+                                            <div className="flex items-center gap-3 mb-4">
+                                                <div className="p-2 rounded-lg bg-slate-100" style={{ color: brandColor }}><Icons.Package size={24} /></div>
+                                                <h3 className="font-bold text-slate-800 text-lg leading-tight">{item.name}</h3>
                                             </div>
-                                        )
-                                    })}
-                                    {filteredInsumos.length === 0 && (
-                                        <div className="col-span-full p-8 text-center text-slate-500 bg-white rounded-xl border border-slate-200 shadow-sm">
-                                            Nenhum insumo encontrado. Adicione insumos na ficha detalhada dos fornecedores.
+                                            <div className="flex gap-2">
+                                                <span className="text-xs font-bold bg-green-50 text-green-700 px-2 py-1 rounded-lg border border-green-200"><Icons.ShieldCheck size={12} className="inline mr-1"/> {item.suppliers.filter(s => s.status === 'Qualificado').length} Qualificados</span>
+                                                <span className="text-xs font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-lg border border-slate-200">{item.suppliers.length} Total</span>
+                                            </div>
                                         </div>
-                                    )}
+                                    ))}
                                 </div>
                             </div>
                         )}
-
                     </main>
 
-                    {/* MODAL NOVO FORNECEDOR */}
+                    {/* OVERLAYS E MODAIS CUSTOMIZADOS (Sem alerts/confirms nativos) */}
+                    
+                    {/* Add Supplier Modal */}
                     {isAddSupplierOpen && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in">
                             <div className="bg-white rounded-xl shadow-xl max-w-sm w-full overflow-hidden">
@@ -773,135 +584,113 @@
                                 </div>
                                 <div className="p-6 space-y-4">
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-600 mb-1">Nome/Razão Social da Empresa</label>
-                                        <input 
-                                            type="text" 
-                                            placeholder="Ex: M. Dias Branco S/A..."
-                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:border-transparent outline-none"
-                                            style={{ '--tw-ring-color': brandColor }}
-                                            value={newSupplierName}
-                                            onChange={(e) => setNewSupplierName(e.target.value)}
-                                            onKeyPress={(e) => e.key === 'Enter' && handleSaveNewSupplier()}
-                                        />
+                                        <label className="block text-xs font-medium text-slate-600 mb-1">Nome/Razão Social</label>
+                                        <input type="text" placeholder="Ex: Fornecedor Ltda..." className="w-full rounded-lg border border-slate-300 p-2 text-sm outline-none focus:ring-2" style={{ '--tw-ring-color': brandColor }} value={newSupplierName} onChange={(e) => setNewSupplierName(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && handleSaveNewSupplier()} />
                                     </div>
-                                    <button 
-                                        onClick={handleSaveNewSupplier}
-                                        className="w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm hover:opacity-90"
-                                        style={{ backgroundColor: brandColor }}
-                                    >
-                                        Salvar Fornecedor
-                                    </button>
+                                    <button onClick={handleSaveNewSupplier} className="w-full text-white py-2.5 rounded-lg text-sm font-bold shadow-sm hover:opacity-90" style={{ backgroundColor: brandColor }}>Salvar</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL DE INSUMO (FORNECEDORES VINCULADOS) */}
+                    {/* Insumo Detail Modal */}
                     {selectedInsumoData && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in">
                             <div className="bg-white rounded-xl shadow-xl max-w-2xl w-full flex flex-col max-h-[90vh]">
-                                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-xl">
+                                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                     <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-white rounded-lg shadow-sm" style={{ color: brandColor }}>
-                                            <Icons.Package size={24} />
-                                        </div>
+                                        <div className="p-2 bg-white rounded-lg shadow-sm" style={{ color: brandColor }}><Icons.Package size={24} /></div>
                                         <div>
                                             <h3 className="font-bold text-xl text-slate-800">{selectedInsumoData.name}</h3>
                                             <p className="text-xs text-slate-500 font-medium">Fornecedores Vinculados</p>
                                         </div>
                                     </div>
-                                    <button onClick={() => setSelectedInsumoData(null)} className="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-200 transition-colors"><Icons.X size={20} /></button>
+                                    <button onClick={() => setSelectedInsumoData(null)} className="text-slate-400"><Icons.X size={20} /></button>
                                 </div>
-                                <div className="p-6 overflow-y-auto">
-                                    <div className="space-y-3">
-                                        {selectedInsumoData.suppliers.map(sup => (
-                                            <div key={sup.id} className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 p-4 border border-slate-200 rounded-xl hover:bg-slate-50 transition-colors">
-                                                <div>
-                                                    <p className="font-bold text-slate-800">{sup.name}</p>
-                                                    {sup.status === 'Qualificado' 
-                                                        ? <p className="text-xs text-green-600 mt-1 flex items-center gap-1 font-medium"><Icons.CheckCircle size={12}/> Apto para compra</p>
-                                                        : <p className="text-xs text-red-500 mt-1 flex items-center gap-1 font-medium"><Icons.AlertTriangle size={12}/> Pendente de regularização</p>
-                                                    }
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <StatusBadge status={sup.status} />
-                                                    <button 
-                                                        onClick={() => { 
-                                                            setSelectedInsumoData(null); 
-                                                            setSelectedSupplier(suppliers.find(s => s.id === sup.id)); 
-                                                            setView('detail'); 
-                                                        }} 
-                                                        className="text-sm font-bold bg-white border shadow-sm px-3 py-1.5 rounded-lg transition-colors hover:bg-slate-50" 
-                                                        style={{ color: brandColor, borderColor: brandColor }}>
-                                                        Ficha Técnica
-                                                    </button>
-                                                </div>
+                                <div className="p-6 overflow-y-auto space-y-3">
+                                    {selectedInsumoData.suppliers.map(sup => (
+                                        <div key={sup.id} className="flex justify-between items-center p-4 border border-slate-200 rounded-xl hover:bg-slate-50">
+                                            <div>
+                                                <p className="font-bold text-slate-800">{sup.name}</p>
+                                                <StatusBadge status={sup.status} />
                                             </div>
-                                        ))}
-                                    </div>
+                                            <button onClick={() => { setSelectedInsumoData(null); setSelectedSupplier(suppliers.find(s => s.id === sup.id)); setView('detail'); }} className="text-sm font-bold bg-white border shadow-sm px-3 py-1.5 rounded-lg" style={{ color: brandColor, borderColor: brandColor }}>Abrir</button>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL DE DOCUMENTO */}
+                    {/* Edit/Add Document Modal */}
                     {isModalOpen && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in">
                             <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden">
                                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
                                     <h3 className="font-bold text-slate-800">{docForm.id ? 'Editar Documento' : 'Novo Documento'}</h3>
-                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><Icons.X size={20} /></button>
+                                    <button onClick={() => setIsModalOpen(false)} className="text-slate-400"><Icons.X size={20} /></button>
                                 </div>
                                 <div className="p-6 space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-600 mb-1">Tipo de Documento</label>
-                                        <select 
-                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:border-transparent outline-none"
-                                            style={{ '--tw-ring-color': brandColor }}
-                                            value={docForm.type}
-                                            onChange={(e) => setDocForm({...docForm, type: e.target.value})}
-                                            disabled={!!docForm.id}
-                                        >
-                                            <option value="">Selecione...</option>
-                                            {DOCUMENT_TYPES.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                                        </select>
-                                    </div>
-                                    
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-600 mb-1">Data de Validade</label>
-                                        <input 
-                                            type="date" 
-                                            className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:border-transparent outline-none"
-                                            style={{ '--tw-ring-color': brandColor }}
-                                            value={docForm.expiryDate}
-                                            onChange={(e) => setDocForm({...docForm, expiryDate: e.target.value})}
-                                        />
-                                    </div>
-
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-600 mb-1">Upload Arquivo</label>
-                                        <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 transition-colors relative">
-                                            <input 
-                                                type="file" 
-                                                accept=".pdf, .jpg, .jpeg, .png"
-                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                                onChange={handleFileChange}
-                                            />
-                                            <div className="flex flex-col items-center gap-2 text-slate-500">
-                                                <Icons.Upload size={24} />
-                                                <span className="text-xs">{docForm.fileName || "Clique para selecionar"}</span>
-                                            </div>
+                                    <select className="w-full rounded-lg border border-slate-300 p-2 text-sm outline-none focus:ring-2" style={{ '--tw-ring-color': brandColor }} value={docForm.type} onChange={(e) => setDocForm({...docForm, type: e.target.value})} disabled={!!docForm.id}>
+                                        <option value="">Selecione o tipo...</option>
+                                        {DOCUMENT_TYPES.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                                    </select>
+                                    <input type="date" className="w-full rounded-lg border border-slate-300 p-2 text-sm outline-none focus:ring-2" style={{ '--tw-ring-color': brandColor }} value={docForm.expiryDate} onChange={(e) => setDocForm({...docForm, expiryDate: e.target.value})} />
+                                    <div className="border-2 border-dashed border-slate-300 rounded-lg p-4 text-center hover:bg-slate-50 relative cursor-pointer">
+                                        <input type="file" accept=".pdf, .jpg, .jpeg, .png" className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" onChange={handleFileChange} />
+                                        <div className="flex flex-col items-center gap-2 text-slate-500">
+                                            <Icons.Upload size={24} />
+                                            <span className="text-xs">{docForm.fileName || "Clique para selecionar arquivo"}</span>
                                         </div>
                                     </div>
-
-                                    <button 
-                                        onClick={handleSaveDocument}
-                                        className="w-full text-white py-2.5 rounded-lg text-sm font-bold transition-colors shadow-sm hover:opacity-90"
-                                        style={{ backgroundColor: brandColor }}
-                                    >
-                                        Salvar Documento
-                                    </button>
+                                    <button onClick={handleSaveDocument} className="w-full text-white py-2.5 rounded-lg text-sm font-bold shadow-sm" style={{ backgroundColor: brandColor }}>Salvar</button>
                                 </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CUSTOM DOCUMENT VIEWER (Substitui window.open) */}
+                    {viewDocMode && (
+                        <div className="fixed inset-0 bg-slate-900/95 flex flex-col z-[60] animate-in">
+                            <div className="flex justify-between items-center p-4 bg-slate-900 text-white">
+                                <h3 className="font-bold flex items-center gap-2"><Icons.FileText /> Visualizador de Arquivo</h3>
+                                <button onClick={() => setViewDocMode(null)} className="hover:text-red-400 bg-white/10 p-2 rounded-full"><Icons.X size={20} /></button>
+                            </div>
+                            <div className="flex-1 w-full bg-slate-800 overflow-hidden">
+                                <iframe src={viewDocMode} className="w-full h-full border-0" title="Visualizador" allowFullScreen />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CUSTOM CONFIRM DIALOG (Substitui confirm() nativo) */}
+                    {confirmDialog && (
+                        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-[70] animate-in">
+                            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 text-center animate-slide-up">
+                                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 mb-4">
+                                    <Icons.AlertTriangle className="text-red-600" size={24} />
+                                </div>
+                                <h3 className="text-lg font-bold text-slate-900 mb-2">Confirmar Ação</h3>
+                                <p className="text-sm text-slate-500 mb-6">{confirmDialog.message}</p>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setConfirmDialog(null)} className="flex-1 bg-slate-100 text-slate-700 py-2.5 rounded-lg font-bold hover:bg-slate-200 transition-colors">Cancelar</button>
+                                    <button onClick={confirmDialog.onConfirm} className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-bold hover:bg-red-700 transition-colors">Confirmar</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CUSTOM TOAST NOTIFICATION (Substitui alert() nativo) */}
+                    {toastInfo && (
+                        <div className="fixed bottom-6 right-6 z-[80] animate-slide-up">
+                            <div className={`flex items-center gap-3 px-5 py-3 rounded-lg shadow-lg border text-sm font-semibold
+                                ${toastInfo.type === 'error' ? 'bg-red-50 border-red-200 text-red-800' : 
+                                  toastInfo.type === 'success' ? 'bg-green-50 border-green-200 text-green-800' : 
+                                  'bg-slate-800 border-slate-700 text-white'}
+                            `}>
+                                {toastInfo.type === 'error' && <Icons.AlertTriangle size={18} />}
+                                {toastInfo.type === 'success' && <Icons.CheckCircle size={18} />}
+                                {toastInfo.type === 'info' && <Icons.Info size={18} />}
+                                {toastInfo.message}
                             </div>
                         </div>
                     )}
