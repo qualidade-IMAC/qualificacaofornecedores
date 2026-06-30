@@ -86,6 +86,8 @@
             Download: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>,
             Loader: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className + " spin"}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>,
             Building: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>,
+            Grid: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></svg>,
+            Menu: ({size=24, className=""}) => <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="18" y2="18"/></svg>,
         };
 
         // Sugestões de documentos comuns (atalho de preenchimento). Cada fornecedor define livremente
@@ -126,6 +128,8 @@
             if (parts.length !== 3) return d;
             return `${parts[2]}/${parts[1]}/${parts[0]}`;
         };
+
+        const normInsumo = (s) => (s || '').trim().toUpperCase();
 
         const docDisplayName = (d) => {
             if (d.name) return d.name;
@@ -195,11 +199,19 @@
             const [listFilter, setListFilter] = useState('all');
 
             // Insumos e Fornecedores States
+            const [insumosList, setInsumosList] = useState([]); // coleção própria "insumos" no Firestore
             const [searchInsumo, setSearchInsumo] = useState("");
-            const [selectedInsumoName, setSelectedInsumoName] = useState(null);
+            const [selectedInsumoId, setSelectedInsumoId] = useState(null);
             const [newInsumo, setNewInsumo] = useState('');
             const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
             const [newSupplierName, setNewSupplierName] = useState('');
+            const [isAddInsumoOpen, setIsAddInsumoOpen] = useState(false);
+            const [newInsumoNameTop, setNewInsumoNameTop] = useState('');
+            const [isEditInsumoOpen, setIsEditInsumoOpen] = useState(false);
+            const [editingInsumo, setEditingInsumo] = useState(null);
+
+            // Layout (sidebar)
+            const [sidebarOpen, setSidebarOpen] = useState(false);
 
             // Branding State sincronizado online
             const [brandColor, setBrandColor] = useState('#1e40af');
@@ -223,6 +235,7 @@
             useEffect(() => {
                 let unsubscribeSuppliers;
                 let unsubscribeSettings;
+                let unsubscribeInsumos;
 
                 const checkFirebaseReady = setInterval(() => {
                     if (window.fb) {
@@ -241,6 +254,13 @@
                             }
                         });
 
+                        unsubscribeInsumos = window.fb.onSnapshot(window.fb.collection(window.fb.db, "insumos"), (snapshot) => {
+                            const loaded = [];
+                            snapshot.forEach(d => loaded.push({ ...d.data(), id: d.id }));
+                            loaded.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+                            setInsumosList(loaded);
+                        });
+
                         unsubscribeSettings = window.fb.onSnapshot(window.fb.doc(window.fb.db, "settings", "ui"), (docSnap) => {
                             if (docSnap.exists()) {
                                 const data = docSnap.data();
@@ -255,8 +275,25 @@
                     clearInterval(checkFirebaseReady);
                     if (unsubscribeSuppliers) unsubscribeSuppliers();
                     if (unsubscribeSettings) unsubscribeSettings();
+                    if (unsubscribeInsumos) unsubscribeInsumos();
                 };
             }, []);
+
+            // Mantém a coleção de insumos sincronizada: qualquer insumo digitado direto num
+            // fornecedor que ainda não exista na coleção "insumos" é registrado automaticamente
+            const inFlightInsumoCreates = useRef(new Set());
+            useEffect(() => {
+                const known = new Set(insumosList.map(i => normInsumo(i.name)));
+                suppliers.forEach(s => (s.insumos || []).forEach(name => {
+                    const n = normInsumo(name);
+                    if (n && !known.has(n) && !inFlightInsumoCreates.current.has(n)) {
+                        inFlightInsumoCreates.current.add(n);
+                        const ref = window.fb.doc(window.fb.collection(window.fb.db, "insumos"));
+                        window.fb.setDoc(ref, { name: name.trim() })
+                            .finally(() => inFlightInsumoCreates.current.delete(n));
+                    }
+                }));
+            }, [suppliers, insumosList]);
 
             const stats = useMemo(() => {
                 const total = suppliers.length;
@@ -294,27 +331,21 @@
             }, [suppliers, searchTerm, listFilter]);
 
             const insumosData = useMemo(() => {
-                const map = new Map();
-                suppliers.forEach(supplier => {
-                    if (supplier.insumos && Array.isArray(supplier.insumos)) {
-                        supplier.insumos.forEach(insumo => {
-                            const key = insumo.trim().toUpperCase();
-                            if (!map.has(key)) map.set(key, { name: insumo.trim(), suppliers: [] });
-                            map.get(key).suppliers.push(supplier);
-                        });
-                    }
-                });
-                return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-            }, [suppliers]);
+                return insumosList.map(ins => {
+                    const norm = normInsumo(ins.name);
+                    const matchingSuppliers = suppliers.filter(s => (s.insumos || []).some(i => normInsumo(i) === norm));
+                    return { id: ins.id, name: ins.name, suppliers: matchingSuppliers };
+                }).sort((a, b) => a.name.localeCompare(b.name));
+            }, [insumosList, suppliers]);
 
             const filteredInsumos = useMemo(() => {
                 return insumosData.filter(i => i.name.toLowerCase().includes(searchInsumo.toLowerCase()));
             }, [insumosData, searchInsumo]);
 
             const selectedInsumoData = useMemo(() => {
-                if (!selectedInsumoName) return null;
-                return insumosData.find(i => i.name === selectedInsumoName) || null;
-            }, [insumosData, selectedInsumoName]);
+                if (!selectedInsumoId) return null;
+                return insumosData.find(i => i.id === selectedInsumoId) || null;
+            }, [insumosData, selectedInsumoId]);
 
             const showToast = (message, type = 'info') => {
                 setToastInfo({ message, type });
@@ -435,6 +466,76 @@
                 const currentInsumos = selectedSupplier.insumos || [];
                 const updatedSup = { ...selectedSupplier, insumos: currentInsumos.filter(i => i !== insumoToRemove) };
                 window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup);
+            };
+
+            // --- Gestão de Insumos (cadastro próprio, independente do fornecedor) ---
+
+            const handleCreateInsumoTop = () => {
+                if (!newInsumoNameTop.trim()) return;
+                const norm = normInsumo(newInsumoNameTop);
+                if (insumosList.some(i => normInsumo(i.name) === norm)) {
+                    showToast("Esse insumo já está cadastrado.", "error");
+                    return;
+                }
+                const ref = window.fb.doc(window.fb.collection(window.fb.db, "insumos"));
+                window.fb.setDoc(ref, { name: newInsumoNameTop.trim() })
+                    .then(() => {
+                        setNewInsumoNameTop('');
+                        setIsAddInsumoOpen(false);
+                        showToast("Insumo cadastrado!", "success");
+                    })
+                    .catch(() => showToast("Erro ao cadastrar insumo.", "error"));
+            };
+
+            const openEditInsumo = (ins) => {
+                setEditingInsumo({ id: ins.id, name: ins.name });
+                setIsEditInsumoOpen(true);
+            };
+
+            const handleRenameInsumo = () => {
+                if (!editingInsumo || !editingInsumo.name.trim()) return;
+                const newName = editingInsumo.name.trim();
+                const norm = normInsumo(newName);
+                if (insumosList.some(i => i.id !== editingInsumo.id && normInsumo(i.name) === norm)) {
+                    showToast("Já existe um insumo com esse nome.", "error");
+                    return;
+                }
+                const oldIns = insumosList.find(i => i.id === editingInsumo.id);
+                const oldNorm = oldIns ? normInsumo(oldIns.name) : null;
+
+                window.fb.setDoc(window.fb.doc(window.fb.db, "insumos", editingInsumo.id), { name: newName }, { merge: true })
+                    .then(async () => {
+                        // Propaga o novo nome para todos os fornecedores que usam o nome antigo
+                        const affected = suppliers.filter(s => (s.insumos || []).some(i => normInsumo(i) === oldNorm));
+                        for (const s of affected) {
+                            const updatedInsumos = (s.insumos || []).map(i => normInsumo(i) === oldNorm ? newName : i);
+                            await window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(s.id)), { ...s, insumos: updatedInsumos });
+                        }
+                        setIsEditInsumoOpen(false);
+                        setEditingInsumo(null);
+                        showToast("Insumo atualizado em todos os fornecedores vinculados.", "success");
+                    })
+                    .catch(() => showToast("Erro ao renomear insumo.", "error"));
+            };
+
+            const confirmDeleteInsumoTop = (ins) => {
+                const data = insumosData.find(i => i.id === ins.id);
+                const count = data ? data.suppliers.length : 0;
+                setConfirmDialog({
+                    message: `Excluir o insumo "${ins.name}"?${count > 0 ? ` Ele será removido de ${count} fornecedor(es) vinculado(s).` : ''}`,
+                    onConfirm: async () => {
+                        const norm = normInsumo(ins.name);
+                        const affected = suppliers.filter(s => (s.insumos || []).some(i => normInsumo(i) === norm));
+                        for (const s of affected) {
+                            const updatedInsumos = (s.insumos || []).filter(i => normInsumo(i) !== norm);
+                            await window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(s.id)), { ...s, insumos: updatedInsumos });
+                        }
+                        await window.fb.deleteDoc(window.fb.doc(window.fb.db, "insumos", ins.id));
+                        setConfirmDialog(null);
+                        if (view === 'insumoDetail' && selectedInsumoId === ins.id) setView('insumos');
+                        showToast("Insumo excluído.", "info");
+                    }
+                });
             };
 
             // Upload do arquivo PDF direto para o Firebase Storage (resolve o limite de 1MB do Firestore)
@@ -575,44 +676,53 @@
                 window.fb.setDoc(window.fb.doc(window.fb.db, "settings", "ui"), { brandColor: color, logoUrl }, { merge: true });
             };
 
-            const NavButton = ({ active, onClick, children }) => (
-                <button onClick={onClick} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${active ? '' : 'text-slate-600 hover:bg-slate-50'}`} style={active ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>
-                    {children}
+            const SidebarButton = ({ active, icon: Icon, label, onClick }) => (
+                <button
+                    onClick={() => { onClick(); setSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold transition-colors border ${active ? 'bg-amber-50 border-amber-200 text-amber-700' : 'border-transparent text-slate-500 hover:bg-slate-50'}`}
+                >
+                    <Icon size={18} className={active ? 'text-amber-500' : 'text-slate-400'} />
+                    {label}
                 </button>
             );
 
+            const pageTitle = (view === 'dashboard') ? 'Início'
+                : (view === 'list' || view === 'detail') ? 'Fornecedores'
+                : (view === 'insumos' || view === 'insumoDetail') ? 'Insumos' : '';
+
             return (
-                <div className="min-h-screen bg-slate-50 relative font-sans text-slate-900 pb-20">
+                <div className="min-h-screen bg-slate-100 relative font-sans text-slate-900 flex">
 
-                    {/* Header */}
-                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
-                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                            <div className="flex justify-between items-center h-16">
-                                <div className="flex items-center gap-3 cursor-pointer" onClick={() => { setView('dashboard'); setListFilter('all'); }}>
-                                    {logoUrl ? <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" /> : <div style={{ color: brandColor }}><Icons.ShieldCheck size={32} /></div>}
-                                    <div>
-                                        <h1 className="text-xl font-bold tracking-tight" style={{ color: brandColor }}>IMAC</h1>
-                                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Qualificação de Fornecedores</p>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <nav className="hidden md:flex gap-1">
-                                        <NavButton active={view === 'dashboard'} onClick={() => { setView('dashboard'); setListFilter('all'); }}>Dashboard</NavButton>
-                                        <NavButton active={view === 'list' || view === 'detail'} onClick={() => { setView('list'); setListFilter('all'); }}>Fornecedores</NavButton>
-                                        <NavButton active={view === 'insumos' || view === 'insumoDetail'} onClick={() => setView('insumos')}>Insumos</NavButton>
-                                    </nav>
-                                    <button onClick={() => setShowSettings(true)} className="p-2 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"><Icons.Settings size={20} /></button>
-                                </div>
+                    {/* Overlay (mobile) */}
+                    {sidebarOpen && <div className="fixed inset-0 bg-black/30 z-30 lg:hidden" onClick={() => setSidebarOpen(false)}></div>}
+
+                    {/* Sidebar */}
+                    <aside className={`fixed lg:sticky top-0 left-0 h-screen w-64 bg-white border-r border-slate-100 z-40 flex flex-col flex-shrink-0 transform transition-transform duration-200 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+                        <div className="px-6 py-6 border-b border-slate-100 flex flex-col items-center lg:items-start">
+                            <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setView('dashboard'); setListFilter('all'); setSidebarOpen(false); }}>
+                                {logoUrl ? <img src={logoUrl} alt="Logo" className="h-9 w-auto object-contain" /> : <div style={{ color: brandColor }}><Icons.ShieldCheck size={28} /></div>}
+                                <h1 className="text-xl font-extrabold tracking-tight" style={{ color: brandColor }}>IMAC</h1>
                             </div>
-                            <nav className="md:hidden flex gap-1 pb-2 -mt-1">
-                                <NavButton active={view === 'dashboard'} onClick={() => { setView('dashboard'); setListFilter('all'); }}>Dashboard</NavButton>
-                                <NavButton active={view === 'list' || view === 'detail'} onClick={() => { setView('list'); setListFilter('all'); }}>Fornecedores</NavButton>
-                                <NavButton active={view === 'insumos' || view === 'insumoDetail'} onClick={() => setView('insumos')}>Insumos</NavButton>
-                            </nav>
+                            <p className="text-[10px] text-slate-400 uppercase tracking-wider font-bold mt-1.5">Qualificação de Fornecedores</p>
                         </div>
-                    </header>
+                        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+                            <SidebarButton active={view === 'dashboard'} icon={Icons.Grid} label="Início" onClick={() => { setView('dashboard'); setListFilter('all'); }} />
+                            <SidebarButton active={view === 'list' || view === 'detail'} icon={Icons.Users} label="Fornecedores" onClick={() => { setView('list'); setListFilter('all'); }} />
+                            <SidebarButton active={view === 'insumos' || view === 'insumoDetail'} icon={Icons.Package} label="Insumos" onClick={() => setView('insumos')} />
+                        </nav>
+                        <div className="px-3 py-4 border-t border-slate-100">
+                            <SidebarButton icon={Icons.Settings} label="Configurações" onClick={() => setShowSettings(true)} />
+                        </div>
+                    </aside>
 
-                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div className="flex-1 flex flex-col min-w-0">
+                        {/* Top bar */}
+                        <header className="bg-white border-b border-slate-100 sticky top-0 z-20 px-4 sm:px-8 h-16 flex items-center gap-3 flex-shrink-0">
+                            <button onClick={() => setSidebarOpen(true)} className="lg:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100"><Icons.Menu size={22} /></button>
+                            <h2 className="text-lg font-bold text-slate-800">{pageTitle}</h2>
+                        </header>
+
+                    <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-24">
 
                         {/* DASHBOARD */}
                         {view === 'dashboard' && (
@@ -758,8 +868,11 @@
                                     </div>
                                     <div className="flex gap-2">
                                         <input value={newInsumo} onChange={e => setNewInsumo(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddInsumo()}
-                                            placeholder="Adicionar insumo (ex: Farinha de Trigo)"
+                                            list="insumo-suggestions" placeholder="Adicionar insumo (ex: Farinha de Trigo)"
                                             className="flex-1 px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2" />
+                                        <datalist id="insumo-suggestions">
+                                            {insumosList.map(ins => <option key={ins.id} value={ins.name} />)}
+                                        </datalist>
                                         <button onClick={handleAddInsumo} className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-1.5" style={{ backgroundColor: brandColor }}><Icons.Plus size={16}/> Adicionar</button>
                                     </div>
                                 </div>
@@ -800,8 +913,15 @@
                         {/* LISTA DE INSUMOS */}
                         {view === 'insumos' && (
                             <div className="animate-in">
-                                <h2 className="text-2xl font-bold text-slate-800 mb-1">Insumos</h2>
-                                <p className="text-slate-500 mb-6">{insumosData.length} insumos cadastrados • clique para ver os fornecedores qualificados</p>
+                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800">Insumos</h2>
+                                        <p className="text-slate-500 text-sm">{insumosData.length} insumos cadastrados • clique para ver os fornecedores qualificados</p>
+                                    </div>
+                                    <button onClick={() => setIsAddInsumoOpen(true)} className="px-4 py-2 rounded-lg text-sm font-medium text-white flex items-center gap-2 shadow-sm self-start" style={{ backgroundColor: brandColor }}>
+                                        <Icons.Plus size={16} /> Novo Insumo
+                                    </button>
+                                </div>
 
                                 <div className="relative mb-5 max-w-md">
                                     <Icons.Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -810,18 +930,21 @@
                                 </div>
 
                                 {filteredInsumos.length === 0 ? (
-                                    <div className="bg-white rounded-xl border border-slate-100 py-16 text-center text-slate-400 text-sm">Nenhum insumo encontrado. Insumos aparecem aqui quando vinculados a um fornecedor.</div>
+                                    <div className="bg-white rounded-xl border border-slate-100 py-16 text-center text-slate-400 text-sm">Nenhum insumo cadastrado ainda. Clique em "Novo Insumo" para começar.</div>
                                 ) : (
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {filteredInsumos.map(ins => (
-                                            <div key={ins.name} onClick={() => { setSelectedInsumoName(ins.name); setView('insumoDetail'); }}
-                                                className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 cursor-pointer hover:shadow-md active:scale-95 transition-all">
+                                            <div key={ins.id} onClick={() => { setSelectedInsumoId(ins.id); setView('insumoDetail'); }}
+                                                className="bg-white rounded-xl shadow-sm border border-slate-100 p-5 cursor-pointer hover:shadow-md transition-all group">
                                                 <div className="flex items-start justify-between mb-3">
                                                     <div className="p-2.5 rounded-lg" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}><Icons.Package size={18}/></div>
-                                                    <span className="text-xs font-medium text-slate-400">{ins.suppliers.length} fornecedor(es)</span>
+                                                    <div className="flex items-center gap-1">
+                                                        <button onClick={e => { e.stopPropagation(); openEditInsumo(ins); }} className="p-1.5 rounded-lg text-slate-300 hover:text-slate-600 hover:bg-slate-100" title="Editar"><Icons.Edit size={14}/></button>
+                                                        <button onClick={e => { e.stopPropagation(); confirmDeleteInsumoTop(ins); }} className="p-1.5 rounded-lg text-slate-300 hover:text-red-500 hover:bg-red-50" title="Excluir"><Icons.Trash2 size={14}/></button>
+                                                    </div>
                                                 </div>
                                                 <p className="font-semibold text-slate-800">{ins.name}</p>
-                                                <p className="text-xs text-slate-400 mt-1 truncate">{ins.suppliers.map(s => s.name).join(', ')}</p>
+                                                <p className="text-xs text-slate-400 mt-1">{ins.suppliers.length} fornecedor(es){ins.suppliers.length > 0 ? `: ${ins.suppliers.map(s => s.name).join(', ')}` : ''}</p>
                                             </div>
                                         ))}
                                     </div>
@@ -834,14 +957,23 @@
                             <div className="animate-in">
                                 <button onClick={() => setView('insumos')} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-700 mb-4"><Icons.ArrowLeft size={16}/> Voltar para Insumos</button>
 
-                                <div className="flex items-center gap-3 mb-6">
-                                    <div className="p-3 rounded-lg" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}><Icons.Package size={24}/></div>
-                                    <div>
-                                        <h2 className="text-xl font-bold text-slate-800">{selectedInsumoData.name}</h2>
-                                        <p className="text-sm text-slate-500">{selectedInsumoData.suppliers.length} fornecedor(es) qualificado(s) para este insumo</p>
+                                <div className="flex items-center justify-between gap-3 mb-6">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="p-3 rounded-lg flex-shrink-0" style={{ backgroundColor: `${brandColor}15`, color: brandColor }}><Icons.Package size={24}/></div>
+                                        <div className="min-w-0">
+                                            <h2 className="text-xl font-bold text-slate-800 truncate">{selectedInsumoData.name}</h2>
+                                            <p className="text-sm text-slate-500">{selectedInsumoData.suppliers.length} fornecedor(es) qualificado(s) para este insumo</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-shrink-0">
+                                        <button onClick={() => openEditInsumo({ id: selectedInsumoData.id, name: selectedInsumoData.name })} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50" title="Editar"><Icons.Edit size={16}/></button>
+                                        <button onClick={() => confirmDeleteInsumoTop({ id: selectedInsumoData.id, name: selectedInsumoData.name })} className="p-2 rounded-lg border border-slate-200 text-red-500 hover:bg-red-50" title="Excluir"><Icons.Trash2 size={16}/></button>
                                     </div>
                                 </div>
 
+                                {selectedInsumoData.suppliers.length === 0 ? (
+                                    <div className="bg-white rounded-xl border border-slate-100 py-16 text-center text-slate-400 text-sm">Nenhum fornecedor vinculado a este insumo ainda. Vá até um fornecedor e adicione este insumo na seção "Insumos Fornecidos".</div>
+                                ) : (
                                 <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100">
                                     {selectedInsumoData.suppliers.map(s => {
                                         const docs = s.documents || [];
@@ -863,9 +995,11 @@
                                         );
                                     })}
                                 </div>
+                                )}
                             </div>
                         )}
                     </main>
+                    </div>
 
                     {/* Modal: Novo Fornecedor */}
                     {isAddSupplierOpen && (
@@ -874,6 +1008,27 @@
                             <input value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSaveNewSupplier()}
                                 placeholder="Ex: GRANDE MOINHO CEARENSE S A" className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 mb-4" autoFocus />
                             <button onClick={handleSaveNewSupplier} className="w-full py-2.5 rounded-lg text-white font-medium text-sm" style={{ backgroundColor: brandColor }}>Salvar Fornecedor</button>
+                        </Modal>
+                    )}
+
+                    {/* Modal: Novo Insumo */}
+                    {isAddInsumoOpen && (
+                        <Modal title="Novo Insumo" onClose={() => setIsAddInsumoOpen(false)}>
+                            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Nome do Insumo</label>
+                            <input value={newInsumoNameTop} onChange={e => setNewInsumoNameTop(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCreateInsumoTop()}
+                                placeholder="Ex: Farinha de Trigo Especial" className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 mb-4" autoFocus />
+                            <button onClick={handleCreateInsumoTop} className="w-full py-2.5 rounded-lg text-white font-medium text-sm" style={{ backgroundColor: brandColor }}>Salvar Insumo</button>
+                        </Modal>
+                    )}
+
+                    {/* Modal: Editar Insumo */}
+                    {isEditInsumoOpen && editingInsumo && (
+                        <Modal title="Editar Insumo" onClose={() => { setIsEditInsumoOpen(false); setEditingInsumo(null); }}>
+                            <label className="text-xs font-medium text-slate-500 mb-1.5 block">Nome do Insumo</label>
+                            <input value={editingInsumo.name} onChange={e => setEditingInsumo(prev => ({ ...prev, name: e.target.value }))} onKeyDown={e => e.key === 'Enter' && handleRenameInsumo()}
+                                className="w-full px-3 py-2.5 rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 mb-2" autoFocus />
+                            <p className="text-xs text-slate-400 mb-4">Renomear atualiza automaticamente todos os fornecedores vinculados a este insumo.</p>
+                            <button onClick={handleRenameInsumo} className="w-full py-2.5 rounded-lg text-white font-medium text-sm" style={{ backgroundColor: brandColor }}>Salvar Alterações</button>
                         </Modal>
                     )}
 
