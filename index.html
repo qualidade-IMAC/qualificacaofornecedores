@@ -88,27 +88,28 @@
             { id: 'laudo', name: '8. Laudo de Análise do Produto', frequency: 'Por Lote', required: true, legislation: 'Controle de Qualidade' }
         ];
 
+        // Seed de dados iniciais caso a coleção do Firebase esteja vazia
         const INITIAL_SUPPLIERS = [
             {
                 id: "1", name: "GRANDE MOINHO CEARENCE S A", status: "Qualificado", insumos: ["Farinha de Trigo Especial", "Mistura para Bolo"],
                 documents: [
-                    { id: 'd1', type: 'alvara_func', issueDate: '2024-01-10', expiryDate: '2025-01-10', status: 'valid', fileName: 'alvara_2024.pdf', fileData: 'mock' },
-                    { id: 'd2', type: 'licenca_san', issueDate: '2024-02-15', expiryDate: '2025-02-15', status: 'valid', fileName: 'licenca_sanitaria.pdf', fileData: 'mock' },
-                    { id: 'd3', type: 'pragas', issueDate: '2024-06-01', expiryDate: '2024-09-01', status: 'warning', fileName: 'dedetizacao_junho.pdf', fileData: 'mock' }
+                    { id: 'd1', type: 'alvara_func', issueDate: '2024-01-10', expiryDate: '2025-01-10', status: 'valid', fileName: 'alvara_2024.pdf', fileData: null },
+                    { id: 'd2', type: 'licenca_san', issueDate: '2024-02-15', expiryDate: '2025-02-15', status: 'valid', fileName: 'licenca_sanitaria.pdf', fileData: null },
+                    { id: 'd3', type: 'pragas', issueDate: '2024-06-01', expiryDate: '2024-09-01', status: 'warning', fileName: 'dedetizacao_junho.pdf', fileData: null }
                 ]
             },
             {
                 id: "2", name: "NESTLE BRASIL LTDA", status: "Pendente", insumos: ["Cacau em Pó", "Leite Condensado"],
                 documents: [
-                    { id: 'd4', type: 'sif_sie', issueDate: '2020-01-01', expiryDate: '2030-01-01', status: 'valid', fileName: 'registro_sif.pdf', fileData: 'mock' },
-                    { id: 'd5', type: 'agua_micro', issueDate: '2024-01-01', expiryDate: '2024-02-01', status: 'expired', fileName: 'agua_jan.pdf', fileData: 'mock' }
+                    { id: 'd4', type: 'sif_sie', issueDate: '2020-01-01', expiryDate: '2030-01-01', status: 'valid', fileName: 'registro_sif.pdf', fileData: null },
+                    { id: 'd5', type: 'agua_micro', issueDate: '2024-01-01', expiryDate: '2024-02-01', status: 'expired', fileName: 'agua_jan.pdf', fileData: null }
                 ]
             },
             {
                 id: "3", name: "BRF S.A.", status: "Em Análise", insumos: ["Peito de Frango Desfiado", "Margarina Folhada"],
                 documents: [
-                    { id: 'd6', type: 'ficha', issueDate: '2024-01-01', expiryDate: '', status: 'valid', fileName: 'ficha_tecnica_frango.pdf', fileData: 'mock' },
-                    { id: 'd7', type: 'laudo', issueDate: '2024-06-01', expiryDate: '', status: 'valid', fileName: 'laudo_lote_123.pdf', fileData: 'mock' }
+                    { id: 'd6', type: 'ficha', issueDate: '2024-01-01', expiryDate: '', status: 'valid', fileName: 'ficha_tecnica_frango.pdf', fileData: null },
+                    { id: 'd7', type: 'laudo', issueDate: '2024-06-01', expiryDate: '', status: 'valid', fileName: 'laudo_lote_123.pdf', fileData: null }
                 ]
             }
         ];
@@ -121,4 +122,370 @@
                 'Bloqueado': 'bg-red-100 text-red-800 border-red-200',
                 'valid': 'bg-green-50 text-green-700 border-green-200',
                 'expired': 'bg-red-50 text-red-700 border-red-200',
-                'warning': 'bg-orange-50 text-orange-700 border-orange-
+                'warning': 'bg-orange-50 text-orange-700 border-orange-200',
+                'missing': 'bg-gray-100 text-gray-500 border-gray-200 border-dashed'
+            };
+            const labels = { 'valid': 'Vigente', 'expired': 'Vencido', 'warning': 'Vence < 30 dias', 'missing': 'Pendente' };
+            return <span className={`px-2 py-1 rounded-full text-xs font-medium border ${styles[status] || 'bg-gray-100 text-gray-800'}`}>{labels[status] || status}</span>;
+        };
+
+        const Card = ({ title, value, subtext, icon: Icon, colorClass, onClick }) => (
+            <div 
+                onClick={onClick}
+                className={`bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex items-start justify-between transition-all ${onClick ? 'cursor-pointer hover:shadow-md active:scale-95' : ''}`}
+            >
+                <div>
+                    <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
+                    <h3 className="text-2xl font-bold text-slate-800">{value}</h3>
+                    {subtext && <p className="text-xs text-slate-400 mt-1">{subtext}</p>}
+                </div>
+                <div className={`p-3 rounded-lg ${colorClass}`}><Icon size={24} /></div>
+            </div>
+        );
+
+        function App() {
+            // States principais alimentados online pelo Firebase
+            const [suppliers, setSuppliers] = useState([]);
+            const [selectedSupplier, setSelectedSupplier] = useState(null);
+            const [searchTerm, setSearchTerm] = useState("");
+            const [view, setView] = useState('dashboard'); // dashboard, list, detail, insumos
+            const [isImporting, setIsImporting] = useState(false);
+            const [listFilter, setListFilter] = useState('all'); 
+            
+            // Insumos e Fornecedores States
+            const [searchInsumo, setSearchInsumo] = useState("");
+            const [selectedInsumoData, setSelectedInsumoData] = useState(null);
+            const [newInsumo, setNewInsumo] = useState('');
+            const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
+            const [newSupplierName, setNewSupplierName] = useState('');
+
+            // Branding State sincronizado online
+            const [brandColor, setBrandColor] = useState('#1e40af');
+            const [logoUrl, setLogoUrl] = useState(null);
+            const [showSettings, setShowSettings] = useState(false);
+
+            // Modals e Toasts
+            const [isModalOpen, setIsModalOpen] = useState(false);
+            const [docForm, setDocForm] = useState({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
+            const [toastInfo, setToastInfo] = useState(null); 
+            const [confirmDialog, setConfirmDialog] = useState(null); 
+            const [viewDocMode, setViewDocMode] = useState(null);
+
+            // Sincronização em tempo real com o Firebase Firestore
+            useEffect(() => {
+                let unsubscribeSuppliers;
+                let unsubscribeSettings;
+
+                const checkFirebaseReady = setInterval(() => {
+                    if (window.fb) {
+                        clearInterval(checkFirebaseReady);
+
+                        // 1. Ouvinte em tempo real da Coleção de Fornecedores
+                        unsubscribeSuppliers = window.fb.onSnapshot(window.fb.collection(window.fb.db, "suppliers"), (snapshot) => {
+                            if (snapshot.empty) {
+                                // Se o banco de dados online estiver zerado, popula com os dados iniciais padrão
+                                INITIAL_SUPPLIERS.forEach(s => {
+                                    window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", s.id), s);
+                                });
+                            } else {
+                                const loaded = [];
+                                snapshot.forEach(doc => {
+                                    loaded.push({ ...doc.data(), id: doc.id });
+                                });
+                                setSuppliers(loaded);
+                            }
+                        });
+
+                        // 2. Ouvinte em tempo real das Configurações de UI (Cores e Logo)
+                        unsubscribeSettings = window.fb.onSnapshot(window.fb.doc(window.fb.doc(window.fb.db, "settings", "ui")), (docSnap) => {
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                if (data.brandColor) setBrandColor(data.brandColor);
+                                if (data.logoUrl) setLogoUrl(data.logoUrl);
+                            }
+                        });
+                    }
+                }, 100);
+
+                return () => {
+                    clearInterval(checkFirebaseReady);
+                    if (unsubscribeSuppliers) unsubscribeSuppliers();
+                    if (unsubscribeSettings) unsubscribeSettings();
+                };
+            }, []);
+
+            // Mantém os detalhes do gerenciador atualizados caso o banco mude em tempo real
+            useEffect(() => {
+                if (selectedSupplier) {
+                    const updatedCurrent = suppliers.find(s => String(s.id) === String(selectedSupplier.id));
+                    if (updatedCurrent) {
+                        setSelectedSupplier(updatedCurrent);
+                    }
+                }
+            }, [suppliers]);
+
+            const stats = useMemo(() => {
+                const total = suppliers.length;
+                const qualified = suppliers.filter(s => s.status === 'Qualificado').length;
+                let expiredDocs = 0;
+                suppliers.forEach(s => s.documents?.forEach(d => { if (d.status === 'expired') expiredDocs++; }));
+                const pendingReview = suppliers.filter(s => s.status === 'Em Análise' || s.status === 'Pendente').length;
+                return { total, qualified, expiredDocs, pendingReview };
+            }, [suppliers]);
+
+            const filteredSuppliers = useMemo(() => {
+                return suppliers.filter(s => {
+                    const matchesSearch = s.name && s.name.toLowerCase().includes(searchTerm.toLowerCase());
+                    let matchesFilter = true;
+                    if (listFilter === 'expired') matchesFilter = s.documents?.some(d => d.status === 'expired');
+                    else if (listFilter === 'pending') matchesFilter = s.status === 'Pendente' || s.status === 'Em Análise';
+                    else if (listFilter === 'qualified') matchesFilter = s.status === 'Qualificado';
+                    return matchesSearch && matchesFilter;
+                });
+            }, [suppliers, searchTerm, listFilter]);
+
+            const insumosData = useMemo(() => {
+                const map = new Map();
+                suppliers.forEach(supplier => {
+                    if (supplier.insumos && Array.isArray(supplier.insumos)) {
+                        supplier.insumos.forEach(insumo => {
+                            const key = insumo.trim().toUpperCase();
+                            if (!map.has(key)) map.set(key, { name: insumo.trim(), suppliers: [] });
+                            map.get(key).suppliers.push(supplier);
+                        });
+                    }
+                });
+                return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+            }, [suppliers]);
+
+            const filteredInsumos = useMemo(() => {
+                return insumosData.filter(i => i.name.toLowerCase().includes(searchInsumo.toLowerCase()));
+            }, [insumosData, searchInsumo]);
+
+            const showToast = (message, type = 'info') => {
+                setToastInfo({ message, type });
+                setTimeout(() => setToastInfo(null), 3500);
+            };
+
+            const handleDashboardClick = (filterType) => {
+                setListFilter(filterType);
+                setView('list');
+            };
+
+            // Criar Novo Fornecedor salvando direto no Firestore
+            const handleSaveNewSupplier = () => {
+                if (!newSupplierName.trim()) {
+                    showToast("Por favor, digite o nome do fornecedor.", "error");
+                    return;
+                }
+                const newId = String(Math.max(...suppliers.map(s => Number(s.id) || 0), 0) + 1);
+                const newSup = { id: newId, name: newSupplierName.trim().toUpperCase(), status: "Pendente", insumos: [], documents: [] };
+                
+                if (window.fb) {
+                    window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", newId), newSup)
+                        .then(() => {
+                            setNewSupplierName("");
+                            setIsAddSupplierOpen(false);
+                            showToast("Fornecedor cadastrado com sucesso!", "success");
+                        })
+                        .catch(() => showToast("Erro ao salvar no servidor.", "error"));
+                }
+            };
+
+            // Importação em Lote via Planilha com persistência no Firestore
+            const handleFileUpload = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsImporting(true);
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    try {
+                        const bstr = evt.target.result;
+                        const wb = XLSX.read(bstr, { type: 'binary' });
+                        const wsname = wb.SheetNames[0];
+                        const ws = wb.Sheets[wsname];
+                        const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+                        let currentId = Math.max(...suppliers.map(s => Number(s.id) || 0), 0) + 1;
+                        let importedCount = 0;
+
+                        for (const row of data) {
+                            if (row.length > 6 && row[6] && typeof row[6] === 'string') {
+                                const name = row[6].trim();
+                                if (name !== 'FORNECEDORES' && name.length > 2) {
+                                    if (!suppliers.some(s => s.name === name)) {
+                                        const newIdStr = String(currentId++);
+                                        const newSup = { id: newIdStr, name: name, status: "Pendente", insumos: [], documents: [] };
+                                        if (window.fb) {
+                                            await window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", newIdStr), newSup);
+                                            importedCount++;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (importedCount > 0) {
+                            showToast(`${importedCount} fornecedores importados e sincronizados!`, "success");
+                        } else {
+                            showToast("Nenhum fornecedor novo encontrado.", "info");
+                        }
+                    } catch (error) {
+                        showToast("Erro ao ler planilha.", "error");
+                    } compression finally {
+                        setIsImporting(false);
+                    }
+                };
+                reader.readAsBinaryString(file);
+            };
+
+            // ALTERADO/CORRIGIDO: Criar ou Editar Documentos com persistência e validação
+            const handleSaveDocument = () => {
+                if (!selectedSupplier || !docForm.type) {
+                    showToast("Selecione o tipo de documento.", "error");
+                    return;
+                }
+                
+                if (!docForm.fileName) {
+                    showToast("Por favor, anexe um arquivo PDF.", "error");
+                    return;
+                }
+
+                let status = 'valid';
+                if (docForm.expiryDate) {
+                    const diffDays = Math.ceil((new Date(docForm.expiryDate) - new Date()) / (1000 * 60 * 60 * 24));
+                    if (diffDays < 0) status = 'expired';
+                    else if (diffDays < 30) status = 'warning';
+                }
+
+                const docPayload = {
+                    id: docForm.id || Date.now().toString(),
+                    type: docForm.type, 
+                    issueDate: new Date().toISOString().split('T')[0],
+                    expiryDate: docForm.expiryDate || '', 
+                    status: status, 
+                    fileData: docForm.fileData, 
+                    fileName: docForm.fileName
+                };
+
+                const currentDocs = selectedSupplier.documents || [];
+                let newDocs = docForm.id 
+                    ? currentDocs.map(d => d.id === docForm.id ? { ...d, ...docPayload } : d)
+                    : [...currentDocs.filter(d => d.type !== docForm.type), docPayload];
+
+                const updatedSup = { ...selectedSupplier, documents: newDocs };
+
+                if (window.fb) {
+                    window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup)
+                        .then(() => {
+                            setIsModalOpen(false);
+                            // Reseta o formulário limpando estados anteriores
+                            setDocForm({ id: null, type: '', expiryDate: '', fileData: null, fileName: '' });
+                            showToast("Documento salvo com sucesso!", "success");
+                        })
+                        .catch((error) => {
+                            console.error("Erro detalhado do Firebase:", error);
+                            showToast("Erro ao salvar o documento. Arquivo muito grande para o banco de dados.", "error");
+                        });
+                }
+            };
+
+            // Remover documento do Firebase
+            const confirmDeleteDocument = (docId) => {
+                setConfirmDialog({
+                    message: "Tem certeza que deseja excluir este documento?",
+                    onConfirm: () => {
+                        const currentDocs = selectedSupplier.documents || [];
+                        const updatedDocs = currentDocs.filter(d => d.id !== docId);
+                        const updatedSup = { ...selectedSupplier, documents: updatedDocs };
+                        
+                        if (window.fb) {
+                            window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup)
+                                .then(() => {
+                                    setConfirmDialog(null);
+                                    showToast("Documento excluído.", "info");
+                                });
+                        }
+                    }
+                });
+            };
+
+            const handleViewDocument = (doc) => {
+                if (doc.fileData) setViewDocMode(doc.fileData);
+                else showToast("Este documento não possui arquivo digital anexado.", "error");
+            };
+
+            // Adicionar Insumo vinculado diretamente ao Firebase
+            const handleAddInsumo = () => {
+                if (!newInsumo.trim() || !selectedSupplier) return;
+                const currentInsumos = selectedSupplier.insumos || [];
+                if (currentInsumos.some(i => i.toLowerCase() === newInsumo.trim().toLowerCase())) return;
+                
+                const updatedSup = { ...selectedSupplier, insumos: [...currentInsumos, newInsumo.trim()] };
+                if (window.fb) {
+                    window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup)
+                        .then(() => setNewInsumo(''));
+                }
+            };
+
+            // Remover Insumo vinculado diretamente no Firebase
+            const handleRemoveInsumo = (insumoToRemove) => {
+                if (!selectedSupplier) return;
+                const currentInsumos = selectedSupplier.insumos || [];
+                const updatedSup = { ...selectedSupplier, insumos: currentInsumos.filter(i => i !== insumoToRemove) };
+                
+                if (window.fb) {
+                    window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup);
+                }
+            };
+
+            // ALTERADO/CORRIGIDO: Controle de uploads para mitigar estouro de armazenamento do Firestore
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    // Impede o processamento se for maior que 700KB (A string Base64 cresce e bateria o limite de 1MB)
+                    if (file.size > 700 * 1024) {
+                        showToast("Arquivo muito grande! Limite máximo permitido de 700 KB para PDFs.", "error");
+                        e.target.value = ""; // Limpa a seleção do input
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onloadend = () => setDocForm(prev => ({ ...prev, fileData: reader.result, fileName: file.name }));
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 relative font-sans text-slate-900 pb-20">
+                    
+                    {/* Header */}
+                    <header className="bg-white border-b border-slate-200 sticky top-0 z-10 shadow-sm">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center h-16">
+                                <div className="flex items-center gap-3">
+                                    {logoUrl ? <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" /> : <div style={{ color: brandColor }}><Icons.ShieldCheck size={32} /></div>}
+                                    <div>
+                                        <h1 className="text-xl font-bold tracking-tight" style={{ color: brandColor }}>IMAC</h1>
+                                        <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">Controle de Qualidade</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-6">
+                                    <nav className="hidden md:flex gap-1">
+                                        <button onClick={() => { setView('dashboard'); setListFilter('all'); }} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'dashboard' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'dashboard' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Dashboard</button>
+                                        <button onClick={() => setView('list')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'list' || view === 'detail' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'list' || view === 'detail' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Fornecedores</button>
+                                        <button onClick={() => setView('insumos')} className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${view === 'insumos' ? 'bg-slate-100' : 'text-slate-600 hover:bg-slate-50'}`} style={view === 'insumos' ? { color: brandColor, backgroundColor: `${brandColor}10` } : {}}>Insumos</button>
+                                    </nav>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+                </div>
+            );
+        }
+
+        const container = document.getElementById('root');
+        const root = ReactDOM.createRoot(container);
+        root.render(<App />);
+    </script>
+</body>
+</html>
