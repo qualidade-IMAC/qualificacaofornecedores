@@ -17,7 +17,6 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-app.js";
         import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-firestore.js";
-        import { getStorage, ref, uploadBytesResumable, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/12.15.0/firebase-storage.js";
 
         // Configuração fornecida do Firebase
         const firebaseConfig = {
@@ -30,16 +29,13 @@
             measurementId: "G-505Q2DS3BX"
         };
 
-        // Inicializa o Firebase, o Firestore (dados) e o Storage (arquivos PDF)
+        // Inicializa o Firebase só para o Firestore (dados). Os arquivos PDF vão para a Cloudinary
+        // (ver CLOUDINARY_CLOUD_NAME / CLOUDINARY_UPLOAD_PRESET no script principal abaixo).
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
-        const storage = getStorage(app);
 
         // Expõe os métodos necessários globalmente para acesso seguro do script React/Babel
-        window.fb = {
-            db, collection, doc, setDoc, deleteDoc, onSnapshot,
-            storage, ref, uploadBytesResumable, getDownloadURL, deleteObject
-        };
+        window.fb = { db, collection, doc, setDoc, deleteDoc, onSnapshot };
         window.fbReady = true;
     </script>
 
@@ -105,6 +101,55 @@
 
         const STATUS_OPTIONS = ['Qualificado', 'Pendente', 'Em Análise', 'Bloqueado'];
         const MAX_FILE_MB = 8;
+
+        // --- Cloudinary (armazenamento de arquivos PDF e logo) ---
+        // 1. Crie uma conta grátis em https://cloudinary.com (sem cartão).
+        // 2. No Dashboard, copie o "Cloud name" e cole abaixo.
+        // 3. Vá em Settings (ícone de engrenagem) > Upload > Upload presets > Add upload preset,
+        //    defina "Signing Mode" como "Unsigned", salve e cole o nome do preset abaixo.
+        // 4. Vá em Settings > Security > ative "Allow delivery of PDF and ZIP files" (senão os PDFs
+        //    ficam bloqueados pra visualização pública e dá erro 401 ao tentar abrir o arquivo).
+        const CLOUDINARY_CLOUD_NAME = "yyy16exl";
+        const CLOUDINARY_UPLOAD_PRESET = "llkvyprq";
+
+        // Envia um arquivo para a Cloudinary via upload "unsigned" (direto do navegador, sem backend).
+        // Retorna { xhr, promise } — o xhr fica disponível pra poder cancelar o envio (xhr.abort()).
+        const uploadToCloudinary = (file, folder, onProgress) => {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+            if (folder) formData.append('folder', folder);
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`);
+
+            const promise = new Promise((resolve, reject) => {
+                xhr.upload.onprogress = (e) => {
+                    if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100));
+                };
+                xhr.onload = () => {
+                    if (xhr.status >= 200 && xhr.status < 300) {
+                        try {
+                            const data = JSON.parse(xhr.responseText);
+                            resolve({ url: data.secure_url, publicId: data.public_id, deleteToken: data.delete_token || null });
+                        } catch (e) {
+                            reject(new Error('Resposta inválida da Cloudinary.'));
+                        }
+                    } else if (xhr.status === 0) {
+                        reject(new Error('cancelado'));
+                    } else {
+                        let msg = `Erro HTTP ${xhr.status}`;
+                        try { msg = JSON.parse(xhr.responseText).error.message; } catch (e) {}
+                        if (CLOUDINARY_CLOUD_NAME === "SEU_CLOUD_NAME_AQUI") msg = "Configure CLOUDINARY_CLOUD_NAME e CLOUDINARY_UPLOAD_PRESET no código antes de usar.";
+                        reject(new Error(msg));
+                    }
+                };
+                xhr.onerror = () => reject(new Error('Falha de rede ao enviar o arquivo.'));
+            });
+
+            xhr.send(formData);
+            return { xhr, promise };
+        };
 
         // Seed de dados iniciais caso a coleção do Firebase esteja vazia
         const INITIAL_SUPPLIERS = [
@@ -220,11 +265,13 @@
 
             // Modals e Toasts
             const [isModalOpen, setIsModalOpen] = useState(false);
-            const [docForm, setDocForm] = useState({ id: null, name: '', note: '', expiryDate: '', fileURL: null, filePath: null, fileName: '', uploading: false, uploadProgress: 0 });
+            const [docForm, setDocForm] = useState({ id: null, name: '', note: '', expiryDate: '', fileURL: null, filePath: null, deleteToken: null, fileName: '', uploading: false, uploadProgress: 0 });
             const [toastInfo, setToastInfo] = useState(null);
             const [confirmDialog, setConfirmDialog] = useState(null);
             const [viewDocUrl, setViewDocUrl] = useState(null);
             const fileInputRef = useRef(null);
+            const uploadTaskRef = useRef(null);
+            const uploadWatchdogRef = useRef(null);
 
             const selectedSupplier = useMemo(
                 () => suppliers.find(s => String(s.id) === String(selectedSupplierId)) || null,
@@ -391,11 +438,17 @@
                 setConfirmDialog({
                     message: `Excluir o fornecedor "${selectedSupplier.name}" e todos os seus documentos? Esta ação não pode ser desfeita.`,
                     onConfirm: async () => {
-                        // Apaga os arquivos do Storage também
+                        // Tenta limpar os arquivos na Cloudinary (só funciona se o upload foi feito há menos de 10min)
                         const docs = selectedSupplier.documents || [];
                         for (const d of docs) {
-                            if (d.filePath) {
-                                try { await window.fb.deleteObject(window.fb.ref(window.fb.storage, d.filePath)); } catch (e) {}
+                            if (d.deleteToken) {
+                                try {
+                                    await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/delete_by_token`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ token: d.deleteToken })
+                                    });
+                                } catch (e) {}
                             }
                         }
                         await window.fb.deleteDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)));
@@ -538,7 +591,27 @@
                 });
             };
 
-            // Upload do arquivo PDF direto para o Firebase Storage (resolve o limite de 1MB do Firestore)
+            // Upload do arquivo PDF para a Cloudinary (armazenamento gratuito de arquivos, sem cartão)
+            // Reinicia o "cão de guarda": se nenhum evento de progresso chegar em 15s
+            // (preset/cloud name errado, sem internet, etc.), cancela e avisa o erro de verdade
+            // em vez de deixar a barra girando pra sempre em "Enviando... 0%"
+            const armUploadWatchdog = (xhr) => {
+                clearTimeout(uploadWatchdogRef.current);
+                uploadWatchdogRef.current = setTimeout(() => {
+                    try { xhr.abort(); } catch (e) {}
+                    setDocForm(prev => ({ ...prev, uploading: false, uploadProgress: 0 }));
+                    showToast("O envio não respondeu em 15s. Confira se CLOUDINARY_CLOUD_NAME e CLOUDINARY_UPLOAD_PRESET estão configurados corretamente no código.", "error");
+                }, 15000);
+            };
+
+            const handleCancelUpload = () => {
+                clearTimeout(uploadWatchdogRef.current);
+                if (uploadTaskRef.current) {
+                    try { uploadTaskRef.current.abort(); } catch (e) {}
+                }
+                setDocForm(prev => ({ ...prev, uploading: false, uploadProgress: 0 }));
+            };
+
             const handleFileChange = (e) => {
                 const file = e.target.files[0];
                 if (!file || !selectedSupplier) return;
@@ -556,26 +629,27 @@
 
                 setDocForm(prev => ({ ...prev, uploading: true, uploadProgress: 0, fileName: file.name }));
 
-                const path = `documentos/${selectedSupplier.id}/${Date.now()}_${file.name}`;
-                const storageRef = window.fb.ref(window.fb.storage, path);
-                const uploadTask = window.fb.uploadBytesResumable(storageRef, file);
+                const { xhr, promise } = uploadToCloudinary(file, `qualificacao-fornecedores/${selectedSupplier.id}`, (progress) => {
+                    armUploadWatchdog(xhr); // recebeu sinal de vida, reinicia o prazo
+                    setDocForm(prev => ({ ...prev, uploadProgress: progress }));
+                });
+                uploadTaskRef.current = xhr;
+                armUploadWatchdog(xhr);
 
-                uploadTask.on('state_changed',
-                    (snapshot) => {
-                        const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-                        setDocForm(prev => ({ ...prev, uploadProgress: progress }));
-                    },
-                    (error) => {
-                        console.error("Erro no upload:", error);
-                        showToast("Erro ao enviar o arquivo. Verifique sua conexão.", "error");
+                promise.then(result => {
+                    clearTimeout(uploadWatchdogRef.current);
+                    setDocForm(prev => ({ ...prev, uploading: false, uploadProgress: 100, fileURL: result.url, filePath: result.publicId, deleteToken: result.deleteToken, fileName: file.name }));
+                    showToast("Arquivo enviado com sucesso!", "success");
+                }).catch(err => {
+                    clearTimeout(uploadWatchdogRef.current);
+                    if (err.message === 'cancelado') {
                         setDocForm(prev => ({ ...prev, uploading: false, uploadProgress: 0 }));
-                    },
-                    async () => {
-                        const url = await window.fb.getDownloadURL(uploadTask.snapshot.ref);
-                        setDocForm(prev => ({ ...prev, uploading: false, uploadProgress: 100, fileURL: url, filePath: path, fileName: file.name }));
-                        showToast("Arquivo enviado com sucesso!", "success");
+                        return;
                     }
-                );
+                    console.error("Erro no upload:", err);
+                    showToast(`Erro ao enviar o arquivo: ${err.message}`, "error");
+                    setDocForm(prev => ({ ...prev, uploading: false, uploadProgress: 0 }));
+                });
             };
 
             const handleSaveDocument = () => {
@@ -596,6 +670,7 @@
                     expiryDate: docForm.expiryDate || '',
                     fileURL: docForm.fileURL,
                     filePath: docForm.filePath,
+                    deleteToken: docForm.deleteToken || null,
                     fileName: docForm.fileName
                 };
 
@@ -611,7 +686,7 @@
                 window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup)
                     .then(() => {
                         setIsModalOpen(false);
-                        setDocForm({ id: null, name: '', note: '', expiryDate: '', fileURL: null, filePath: null, fileName: '', uploading: false, uploadProgress: 0 });
+                        setDocForm({ id: null, name: '', note: '', expiryDate: '', fileURL: null, filePath: null, deleteToken: null, fileName: '', uploading: false, uploadProgress: 0 });
                         showToast("Documento salvo com sucesso!", "success");
                     })
                     .catch((error) => {
@@ -629,8 +704,17 @@
                         const updatedDocs = currentDocs.filter(d => d.id !== docId);
                         const updatedSup = { ...selectedSupplier, documents: updatedDocs };
 
-                        if (docToRemove && docToRemove.filePath) {
-                            try { await window.fb.deleteObject(window.fb.ref(window.fb.storage, docToRemove.filePath)); } catch (e) {}
+                        // A Cloudinary só permite exclusão sem servidor próprio via "delete_token",
+                        // válido por 10 minutos após o upload. Fora desse prazo, o arquivo só some da
+                        // lista aqui — ele continua ocupando espaço na Cloudinary (dentro dos 25 GB grátis).
+                        if (docToRemove && docToRemove.deleteToken) {
+                            try {
+                                await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/delete_by_token`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ token: docToRemove.deleteToken })
+                                });
+                            } catch (e) {}
                         }
                         await window.fb.setDoc(window.fb.doc(window.fb.db, "suppliers", String(selectedSupplier.id)), updatedSup);
                         setConfirmDialog(null);
@@ -643,11 +727,11 @@
                 if (existingDoc) {
                     setDocForm({
                         id: existingDoc.id, name: docDisplayName(existingDoc), note: existingDoc.note || '', expiryDate: existingDoc.expiryDate || '',
-                        issueDate: existingDoc.issueDate, fileURL: existingDoc.fileURL, filePath: existingDoc.filePath,
+                        issueDate: existingDoc.issueDate, fileURL: existingDoc.fileURL, filePath: existingDoc.filePath, deleteToken: existingDoc.deleteToken || null,
                         fileName: existingDoc.fileName, uploading: false, uploadProgress: 0
                     });
                 } else {
-                    setDocForm({ id: null, name: '', note: '', expiryDate: '', fileURL: null, filePath: null, fileName: '', uploading: false, uploadProgress: 0 });
+                    setDocForm({ id: null, name: '', note: '', expiryDate: '', fileURL: null, filePath: null, deleteToken: null, fileName: '', uploading: false, uploadProgress: 0 });
                 }
                 setIsModalOpen(true);
             };
@@ -660,14 +744,13 @@
             const handleLogoUpload = (e) => {
                 const file = e.target.files[0];
                 if (!file) return;
-                const path = `branding/logo_${Date.now()}_${file.name}`;
-                const storageRef = window.fb.ref(window.fb.storage, path);
-                window.fb.uploadBytesResumable(storageRef, file).on('state_changed', () => {}, (err) => {
-                    showToast("Erro ao enviar logo.", "error");
-                }, async () => {
-                    const url = await window.fb.getDownloadURL(storageRef);
-                    setLogoUrl(url);
-                    window.fb.setDoc(window.fb.doc(window.fb.db, "settings", "ui"), { brandColor, logoUrl: url }, { merge: true });
+                const { promise } = uploadToCloudinary(file, 'qualificacao-fornecedores/branding', () => {});
+                promise.then(result => {
+                    setLogoUrl(result.url);
+                    window.fb.setDoc(window.fb.doc(window.fb.db, "settings", "ui"), { brandColor, logoUrl: result.url }, { merge: true });
+                }).catch(err => {
+                    console.error("Erro ao enviar logo:", err);
+                    showToast(`Erro ao enviar logo: ${err.message}`, "error");
                 });
             };
 
@@ -1077,9 +1160,12 @@
                                         <input type="file" accept="application/pdf" className="hidden" onChange={handleFileChange} ref={fileInputRef} />
                                     </label>
                                     {docForm.uploading && (
-                                        <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
-                                            <div className="h-full rounded-full transition-all" style={{ width: `${docForm.uploadProgress}%`, backgroundColor: brandColor }}></div>
-                                        </div>
+                                        <>
+                                            <div className="w-full bg-slate-100 rounded-full h-1.5 mt-2 overflow-hidden">
+                                                <div className="h-full rounded-full transition-all" style={{ width: `${docForm.uploadProgress}%`, backgroundColor: brandColor }}></div>
+                                            </div>
+                                            <button type="button" onClick={handleCancelUpload} className="text-xs text-red-500 hover:underline mt-1.5">Cancelar envio</button>
+                                        </>
                                     )}
                                 </div>
                                 <button onClick={handleSaveDocument} disabled={docForm.uploading} className="w-full py-2.5 rounded-lg text-white font-medium text-sm disabled:opacity-50" style={{ backgroundColor: brandColor }}>
